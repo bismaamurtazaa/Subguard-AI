@@ -6,6 +6,245 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
+/* ══════════════════════════════════════════════════════════════
+   OpenRouter AI helpers
+   ══════════════════════════════════════════════════════════════ */
+
+const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
+const AI_MODEL = 'google/gemini-2.0-flash-001';
+
+async function callAI(
+  systemPrompt: string,
+  userPrompt: string,
+): Promise<string | null> {
+  const apiKey = Deno.env.get('OPENROUTER_API_KEY');
+  if (!apiKey) return null;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 25_000);
+
+  try {
+    const res = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+        'HTTP-Referer': 'https://subguard.app',
+        'X-Title': 'SubGuard',
+      },
+      body: JSON.stringify({
+        model: AI_MODEL,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature: 0.1,
+        max_tokens: 3000,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.text().catch(() => 'unknown');
+      console.error(`OpenRouter error ${res.status}:`, err.slice(0, 200));
+      return null;
+    }
+
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content ?? null;
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      console.error('OpenRouter request timed out');
+    } else {
+      console.error('OpenRouter call failed:', err);
+    }
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/* ──────────── AI: Enhance extraction when regex misses key fields ──────────── */
+
+interface AIEnrichedInfo {
+  service_name?: string;
+  price?: number | null;
+  billing_cycle?: 'monthly' | 'yearly' | null;
+  next_billing_date?: string | null;
+  trial_end_date?: string | null;
+  is_trial?: boolean;
+  category?: string;
+}
+
+const EXTRACTION_PROMPT = `You are a subscription email parser. Extract structured data from the email below.
+
+Return ONLY valid JSON with these fields (use null for missing values):
+{
+  "service_name": "best-guess service name",
+  "price": number or null (the amount, convert to PKR — treat $1 ≈ PKR 280, €1 ≈ PKR 300, £1 ≈ PKR 350),
+  "billing_cycle": "monthly" | "yearly" | null,
+  "next_billing_date": "YYYY-MM-DD" or null,
+  "trial_end_date": "YYYY-MM-DD" or null,
+  "is_trial": true/false,
+  "category": "entertainment" | "productivity" | "utilities" | "health" | "shopping" | "other"
+}`;
+
+async function aiExtractInfo(
+  subject: string,
+  snippet: string,
+  fromAddress: string,
+  ruleBased: ExtractedInfo,
+): Promise<ExtractedInfo> {
+  const raw = await callAI(
+    EXTRACTION_PROMPT,
+    `Subject: ${subject}\nSnippet: ${snippet}\nFrom: ${fromAddress}\n\nReturn JSON.`,
+  );
+
+  if (!raw) return ruleBased;
+
+  try {
+    // Extract JSON from the response (handle markdown code fences)
+    const jsonStr = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+    const enriched: AIEnrichedInfo = JSON.parse(jsonStr);
+
+    return {
+      serviceName: enriched.service_name ?? ruleBased.serviceName,
+      price: enriched.price ?? ruleBased.price,
+      billingCycle: enriched.billing_cycle ?? ruleBased.billingCycle,
+      nextDate: enriched.next_billing_date ?? ruleBased.nextDate,
+      trialEnd: enriched.trial_end_date ?? ruleBased.trialEnd,
+      category: enriched.category ?? ruleBased.category,
+      isTrial: enriched.is_trial ?? ruleBased.isTrial,
+    };
+  } catch {
+    return ruleBased; // Parse failed — use rule-based result
+  }
+}
+
+/* ──────────── AI: Comprehensive analysis (usage + overlaps + recommendations) ──────────── */
+
+interface AIUsageResult {
+  subscription_id: string;
+  usage_score: number;         // 0–100
+  usage_label: 'rarely' | 'occasional' | 'moderate' | 'frequent';
+  reasoning: string;
+}
+
+interface AIOverlapResult {
+  category: string;
+  description: string;
+  subscriptions: string[];     // subscription IDs
+}
+
+interface AIRecommendationResult {
+  subscription_id: string | null;
+  recommendation_type: 'cancel' | 'downgrade' | 'investigate';
+  title: string;
+  description: string;
+  potential_savings_monthly: number;
+  potential_savings_yearly: number;
+  reason_category: string;
+  urgency: 'high' | 'medium' | 'low';
+  rank: number;
+}
+
+interface AIAnalysisResult {
+  usage_scores: AIUsageResult[];
+  overlaps: AIOverlapResult[];
+  recommendations: AIRecommendationResult[];
+}
+
+const ANALYSIS_SYSTEM_PROMPT = `You are a subscription optimisation expert for SubGuard. Analyse the user's subscriptions and provide three things in a single JSON response:
+
+1. **Usage scores** — For each subscription, score how actively it's used (0-100) based on:
+   - Frequency of related emails (receipts, usage notifications)
+   - Recent activity signals
+   - Trial status (trials are high-usage by nature)
+   Label: rarely(0-20), occasional(21-40), moderate(41-70), frequent(71-100).
+
+2. **Overlap groups** — Subscriptions that serve a similar purpose (e.g. Netflix+Disney+ are video streaming overlaps). Group them with a descriptive category name.
+
+3. **Recommendations** — Ranked suggestions to save money. Prioritise:
+   - Low-usage subscriptions with high cost
+   - Overlapping subscriptions where one could be dropped
+   - Trials ending soon
+   - Upcoming renewals where the subscription is barely used
+
+Return ONLY valid JSON in this exact structure:
+{
+  "usage_scores": [
+    { "subscription_id": "uuid", "usage_score": 75, "usage_label": "frequent", "reasoning": "brief explanation" }
+  ],
+  "overlaps": [
+    { "category": "Video Streaming", "description": "Multiple video streaming services", "subscriptions": ["uuid1", "uuid2"] }
+  ],
+  "recommendations": [
+    { "subscription_id": "uuid_or_null", "recommendation_type": "cancel", "title": "short title", "description": "explanation with savings", "potential_savings_monthly": 500, "potential_savings_yearly": 6000, "reason_category": "low_usage", "urgency": "medium", "rank": 1 }
+  ]
+}`;
+
+async function aiAnalyzeSubscriptions(
+  subscriptions: SubscriptionRow[],
+  emailSnippets: DetectedEmailRow[],
+  usageSignals: UsageSignalRow[],
+): Promise<AIAnalysisResult | null> {
+  // Build a concise summary of subscriptions for the AI
+  const subSummaries = subscriptions.map((s) => ({
+    id: s.id,
+    name: s.service_name,
+    price_pkr: s.price,
+    cycle: s.billing_cycle,
+    category: s.category,
+    status: s.status,
+    next_billing: s.next_billing_date,
+    trial_end: s.trial_end_date,
+    current_usage_score: s.usage_score,
+    current_usage_label: s.usage_label,
+  }));
+
+  // Build a summary of detected emails relevant to these subscriptions
+  const emailSummary = emailSnippets.slice(0, 50).map((e) => ({
+    subject: e.subject,
+    snippet: e.snippet?.slice(0, 120),
+    received: e.received_at,
+    category: e.category,
+  }));
+
+  // Build usage signal summary
+  const signalsSummary = usageSignals.slice(0, 30).map((sig) => ({
+    type: sig.signal_type,
+    date: sig.signal_date,
+    summary: sig.signal_summary?.slice(0, 100),
+  }));
+
+  const userPrompt = JSON.stringify({
+    subscriptions: subSummaries,
+    recent_emails: emailSummary,
+    usage_signals: signalsSummary,
+  });
+
+  const raw = await callAI(ANALYSIS_SYSTEM_PROMPT, userPrompt);
+  if (!raw) return null;
+
+  try {
+    const jsonStr = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+    const result: AIAnalysisResult = JSON.parse(jsonStr);
+
+    // Validate structure — return null if missing critical fields
+    if (!Array.isArray(result.usage_scores) || !Array.isArray(result.recommendations)) {
+      return null;
+    }
+    if (result.usage_scores.length === 0 && result.recommendations.length === 0) {
+      return null;
+    }
+
+    return result;
+  } catch (err) {
+    console.error('AI analysis JSON parse error:', err);
+    return null;
+  }
+}
+
 /* ──────────── Gmail API helpers ──────────── */
 
 const GMAIL_BASE = 'https://gmail.googleapis.com/gmail/v1/users/me';
@@ -28,7 +267,6 @@ async function gmailFetch(path: string, token: string, init?: RequestInit) {
 
 function decodeBase64Url(s: string): string {
   s = s.replace(/-/g, '+').replace(/_/g, '/');
-  // Pad
   while (s.length % 4) s += '=';
   try {
     return decodeURIComponent(
@@ -86,14 +324,13 @@ function buildSearchQuery(): string {
   const keywordQueries = [
     'subject:("subscription confirmed" OR "trial started" OR "payment successful" OR "receipt" OR "invoice" OR "your subscription" OR "welcome to" OR "billing" OR "renewal" OR "payment received")',
   ];
-  // Only look at last 6 months
   const recent = new Date();
   recent.setMonth(recent.getMonth() - 6);
   const dateStr = recent.toISOString().slice(0, 10);
   return `(${domainQueries.join(' OR ')}) OR (${keywordQueries.join(' OR ')} AND after:${dateStr})`;
 }
 
-/* ──────────── Subscription extractor ──────────── */
+/* ──────────── Subscription extractor (rule-based) ──────────── */
 
 interface ExtractedInfo {
   serviceName: string;
@@ -142,7 +379,6 @@ function parseDateFromText(text: string): string | null {
     const m = text.match(pattern);
     if (!m) continue;
 
-    // Named month pattern
     if (m[1] && isNaN(Number(m[1]))) {
       const month = extractMonthNum(m[1]);
       const day = parseInt(m[2]);
@@ -152,13 +388,11 @@ function parseDateFromText(text: string): string | null {
         return d.toISOString().slice(0, 10);
       }
     }
-    // Numeric date
     if (m[1] && !isNaN(Number(m[1])) && m[2] && !isNaN(Number(m[2]))) {
       let month = parseInt(m[1]);
       let day = parseInt(m[2]);
       let year = m[3] ? parseInt(m[3]) : new Date().getFullYear();
       if (year < 100) year += 2000;
-      // If first value > 12, it's likely day/month
       if (month > 12) {
         [day, month] = [month, day];
       }
@@ -197,7 +431,6 @@ function extractServiceName(fromAddress: string, subject: string, snippet: strin
 
   for (const [domain, info] of Object.entries(KNOWN_DOMAINS)) {
     if (fromLower.includes(domain)) {
-      // Try to find a more specific name from subject/snippet
       const combined = `${subject} ${snippet}`;
       if (domain === 'netflix.com' && combined.match(/premium|basic|standard|ultra/i)) {
         const tier = combined.match(/\b(premium|basic|standard|ultra)\b/i)?.[1] || '';
@@ -221,14 +454,12 @@ function extractServiceName(fromAddress: string, subject: string, snippet: strin
     }
   }
 
-  // Try to extract from subject/snippet
   const combined = `${subject} ${snippet}`;
   const subMatch = combined.match(/(?:your\s+)?(.+?)\s+(?:subscription|plan|membership|premium|pro|plus)/i);
   if (subMatch) {
     return { service: subMatch[1].trim(), category: 'other' };
   }
 
-  // Extract domain name as fallback
   const domainMatch = fromAddress.match(/@([^.]+)/);
   if (domainMatch) {
     const name = domainMatch[1].charAt(0).toUpperCase() + domainMatch[1].slice(1);
@@ -247,7 +478,6 @@ function extractInfo(subject: string, snippet: string, fromAddress: string): Ext
   const isTrial = TRIAL_KEYWORDS.test(text);
   const trialEnd = isTrial ? nextDate : null;
 
-  // Default billing cycle
   const finalCycle = billingCycle || 'monthly';
 
   return {
@@ -261,10 +491,57 @@ function extractInfo(subject: string, snippet: string, fromAddress: string): Ext
   };
 }
 
-/* ──────────── Main handler ──────────── */
+/* ══════════════════════════════════════════════════════════════
+   Types for the AI analysis
+   ══════════════════════════════════════════════════════════════ */
+
+interface SubscriptionRow {
+  id: string;
+  user_id: string;
+  service_name: string;
+  price: number;
+  currency: string;
+  billing_cycle: string;
+  category: string;
+  status: string;
+  next_billing_date: string | null;
+  trial_end_date: string | null;
+  detected_email_id: string | null;
+  is_manually_added: boolean;
+  usage_score: number;
+  usage_label: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface DetectedEmailRow {
+  id: string;
+  user_id: string;
+  gmail_message_id: string | null;
+  from_address: string | null;
+  subject: string | null;
+  snippet: string | null;
+  received_at: string | null;
+  category: string;
+  is_processed: boolean;
+  created_at: string;
+}
+
+interface UsageSignalRow {
+  id: string;
+  subscription_id: string;
+  signal_type: string;
+  detected_email_id: string | null;
+  signal_date: string | null;
+  signal_summary: string | null;
+  created_at: string;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Main handler
+   ══════════════════════════════════════════════════════════════ */
 
 Deno.serve(async (req: Request) => {
-  // CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -295,7 +572,7 @@ Deno.serve(async (req: Request) => {
     // Create Supabase client with user context
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_PUBLISHABLE_KEYS') 
+      Deno.env.get('SUPABASE_PUBLISHABLE_KEYS')
         ? JSON.parse(Deno.env.get('SUPABASE_PUBLISHABLE_KEYS')!)['default']
         : Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       { global: { headers: { Authorization: authHeader } } },
@@ -326,7 +603,6 @@ Deno.serve(async (req: Request) => {
     const messageIds: string[] = searchResult.messages?.map((m: { id: string }) => m.id) ?? [];
 
     if (messageIds.length === 0) {
-      // Update last scan time
       await supabaseClient.from('user_gmail_tokens').upsert({
         user_id: user.id,
         gmail_email: gmailEmail,
@@ -346,10 +622,14 @@ Deno.serve(async (req: Request) => {
     // Process each message
     const detected: { emailId?: string; subId?: string }[] = [];
     const processedCount = { emails: 0, subscriptions: 0 };
+    const newSnippets: { subject: string; snippet: string; received_at: string; category: string }[] = [];
 
     for (const msgId of messageIds) {
       try {
-        const msg = await gmailFetch(`/messages/${msgId}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`, providerToken);
+        const msg = await gmailFetch(
+          `/messages/${msgId}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
+          providerToken,
+        );
 
         const headers = msg.payload?.headers ?? [];
         const fromAddress = getHeader(headers, 'From');
@@ -357,8 +637,28 @@ Deno.serve(async (req: Request) => {
         const snippet = msg.snippet ?? '';
         const receivedAt = new Date(parseInt(msg.internalDate) || Date.now()).toISOString();
 
-        // Extract subscription info
-        const info = extractInfo(subject, snippet, fromAddress);
+        // Extract subscription info (rule-based first)
+        let info = extractInfo(subject, snippet, fromAddress);
+
+        // AI enhancement: call when regex missed key fields
+        const needsAI = !info.price || info.price <= 0 ||
+          info.serviceName === 'Unknown Service' ||
+          (!info.nextDate && !info.trialEnd);
+
+        if (needsAI) {
+          const enhanced = await aiExtractInfo(subject, snippet, fromAddress, info);
+          // Only use enhanced values that actually improved — never regress a known good service name
+          info = {
+            ...info,
+            serviceName: enhanced.serviceName !== 'Unknown Service' ? enhanced.serviceName : info.serviceName,
+            price: enhanced.price && enhanced.price > 0 ? enhanced.price : info.price,
+            billingCycle: enhanced.billingCycle ?? info.billingCycle,
+            nextDate: enhanced.nextDate ?? info.nextDate,
+            trialEnd: enhanced.trialEnd ?? info.trialEnd,
+            category: enhanced.category !== 'other' ? enhanced.category : info.category,
+            isTrial: enhanced.isTrial ?? info.isTrial,
+          };
+        }
 
         // Store detected email
         const { data: emailRecord, error: emailError } = await supabaseClient
@@ -384,7 +684,14 @@ Deno.serve(async (req: Request) => {
         const emailId = emailRecord?.id;
         processedCount.emails++;
 
-        // Check if this service already exists for this user
+        newSnippets.push({
+          subject,
+          snippet,
+          received_at: receivedAt,
+          category: info.category,
+        });
+
+        // Check if service already exists for this user
         const { data: existingSub } = await supabaseClient
           .from('subscriptions')
           .select('id, service_name')
@@ -417,6 +724,15 @@ Deno.serve(async (req: Request) => {
           if (!subError && subRecord) {
             processedCount.subscriptions++;
             detected.push({ emailId, subId: subRecord.id });
+
+            // Store a usage signal from the detected email
+            await supabaseClient.from('usage_signals').insert({
+              subscription_id: subRecord.id,
+              signal_type: 'email_detected',
+              detected_email_id: emailId,
+              signal_date: receivedAt,
+              signal_summary: `Email from ${fromAddress}: ${subject}`,
+            }).catch(() => {});
           }
         } else if (existingSub) {
           // Update existing
@@ -431,6 +747,15 @@ Deno.serve(async (req: Request) => {
             .eq('id', existingSub.id);
 
           detected.push({ emailId, subId: existingSub.id });
+
+          // Store usage signal
+          await supabaseClient.from('usage_signals').insert({
+            subscription_id: existingSub.id,
+            signal_type: 'email_detected',
+            detected_email_id: emailId,
+            signal_date: receivedAt,
+            signal_summary: `Email from ${fromAddress}: ${subject}`,
+          }).catch(() => {});
         }
       } catch (err) {
         console.error(`Error processing message ${msgId}:`, err);
@@ -444,10 +769,12 @@ Deno.serve(async (req: Request) => {
       last_scan_at: new Date().toISOString(),
     }, { onConflict: 'user_id' });
 
-    // Generate recommendations and alerts for found subscriptions
-    if (processedCount.subscriptions > 0) {
-      await generateRecommendationsAndAlerts(supabaseClient, user.id);
-    }
+    // Generate AI-powered recommendations and alerts
+    await generateAIRecommendationsAndAlerts(
+      supabaseClient,
+      user.id,
+      newSnippets,
+    );
 
     return new Response(JSON.stringify({
       success: true,
@@ -471,11 +798,14 @@ Deno.serve(async (req: Request) => {
   }
 });
 
-/* ──────────── Post-scan intelligence ──────────── */
+/* ══════════════════════════════════════════════════════════════
+   AI-powered post-scan intelligence
+   ══════════════════════════════════════════════════════════════ */
 
-async function generateRecommendationsAndAlerts(
+async function generateAIRecommendationsAndAlerts(
   supabase: ReturnType<typeof createClient>,
   userId: string,
+  newSnippets: { subject: string; snippet: string; received_at: string; category: string }[],
 ) {
   // Get user's active subscriptions
   const { data: subs } = await supabase
@@ -486,20 +816,31 @@ async function generateRecommendationsAndAlerts(
 
   if (!subs || subs.length === 0) return;
 
-  // Generate recommendations for low-usage or overlapping subscriptions
-  const recs: {
-    user_id: string;
-    subscription_id: string;
-    recommendation_type: string;
-    title: string;
-    description: string;
-    potential_savings_monthly: number;
-    potential_savings_yearly: number;
-    reason_category: string;
-    urgency: string;
-    rank: number;
-  }[] = [];
+  // Get detected emails for context
+  const { data: emails } = await supabase
+    .from('detected_emails')
+    .select('*')
+    .eq('user_id', userId)
+    .order('received_at', { ascending: false })
+    .limit(50);
 
+  // Get existing usage signals
+  const subIds = subs.map((s: SubscriptionRow) => s.id);
+  const { data: signals } = await supabase
+    .from('usage_signals')
+    .select('*')
+    .in('subscription_id', subIds)
+    .order('signal_date', { ascending: false })
+    .limit(100);
+
+  // ── Step 1: Try AI-powered analysis ──
+  const aiResult = await aiAnalyzeSubscriptions(
+    subs as SubscriptionRow[],
+    (emails ?? []) as DetectedEmailRow[],
+    (signals ?? []) as UsageSignalRow[],
+  );
+
+  // ── Step 2: Generate renewal alerts (always do this — date-based, no AI needed) ──
   const alerts: {
     user_id: string;
     subscription_id: string;
@@ -511,40 +852,7 @@ async function generateRecommendationsAndAlerts(
     scheduled_at: string;
   }[] = [];
 
-  // Find overlap groups (by category)
-  const categoryGroups = new Map<string, typeof subs>();
-  for (const sub of subs) {
-    const existing = categoryGroups.get(sub.category) ?? [];
-    existing.push(sub);
-    categoryGroups.set(sub.category, existing);
-  }
-
-  for (const [category, categorySubs] of categoryGroups) {
-    if (categorySubs.length > 1) {
-      // Create overlap group
-      const { data: group } = await supabase
-        .from('overlap_groups')
-        .insert({
-          user_id: userId,
-          category: `${category.charAt(0).toUpperCase() + category.slice(1)} Overlap`,
-          description: `You have ${categorySubs.length} subscriptions in the ${category} category. Consider consolidating.`,
-        })
-        .select('id')
-        .single();
-
-      if (group) {
-        for (const sub of categorySubs) {
-          await supabase.from('overlap_members').upsert({
-            overlap_group_id: group.id,
-            subscription_id: sub.id,
-          }, { onConflict: ['overlap_group_id', 'subscription_id'].join(',') });
-        }
-      }
-    }
-  }
-
-  // Generate renewal alerts
-  for (const sub of subs) {
+  for (const sub of subs as SubscriptionRow[]) {
     if (sub.next_billing_date) {
       const nextDate = new Date(sub.next_billing_date);
       const daysBefore = Math.ceil((nextDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
@@ -588,26 +896,144 @@ async function generateRecommendationsAndAlerts(
     await supabase.from('renewal_alerts').insert(alert);
   }
 
-  // Generate savings recommendations (low usage or cancelled soon)
+  // ── Step 3: Apply AI insights (or fall back to heuristic) ──
+  if (aiResult) {
+    await applyAIResults(supabase, userId, subs as SubscriptionRow[], aiResult);
+  } else {
+    console.log('AI analysis unavailable — falling back to heuristic logic');
+    await heuristicFallback(supabase, userId, subs as SubscriptionRow[]);
+  }
+}
+
+/* ──────────── Apply AI analysis results ──────────── */
+
+async function applyAIResults(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  subs: SubscriptionRow[],
+  result: AIAnalysisResult,
+) {
+  const subMap = new Map(subs.map((s) => [s.id, s]));
+
+  // 1. Update usage scores
+  for (const score of result.usage_scores) {
+    const sub = subMap.get(score.subscription_id);
+    if (!sub) continue;
+
+    await supabase
+      .from('subscriptions')
+      .update({
+        usage_score: Math.max(0, Math.min(100, score.usage_score)),
+        usage_label: score.usage_label,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', score.subscription_id)
+      .eq('user_id', userId);
+  }
+
+  // 2. Create overlap groups
+  for (const group of result.overlaps) {
+    if (group.subscriptions.length < 2) continue;
+
+    const { data: overlapGroup } = await supabase
+      .from('overlap_groups')
+      .insert({
+        user_id: userId,
+        category: group.category,
+        description: group.description,
+      })
+      .select('id')
+      .single();
+
+    if (overlapGroup) {
+      for (const subId of group.subscriptions) {
+        if (subMap.has(subId)) {
+          await supabase.from('overlap_members')
+            .upsert({
+              overlap_group_id: overlapGroup.id,
+              subscription_id: subId,
+            }, { onConflict: ['overlap_group_id', 'subscription_id'].join(',') });
+        }
+      }
+    }
+  }
+
+  // 3. Create recommendations
+  for (const rec of result.recommendations) {
+    // Validate that subscription_id exists if provided
+    if (rec.subscription_id && !subMap.has(rec.subscription_id)) continue;
+
+    await supabase.from('recommendations').insert({
+      user_id: userId,
+      subscription_id: rec.subscription_id,
+      recommendation_type: rec.recommendation_type,
+      title: rec.title,
+      description: rec.description,
+      potential_savings_monthly: rec.potential_savings_monthly,
+      potential_savings_yearly: rec.potential_savings_yearly,
+      reason_category: rec.reason_category,
+      urgency: rec.urgency,
+      rank: rec.rank,
+      is_dismissed: false,
+    });
+  }
+}
+
+/* ──────────── Heuristic fallback (original logic) ──────────── */
+
+async function heuristicFallback(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  subs: SubscriptionRow[],
+) {
+  // Overlap detection by category
+  const categoryGroups = new Map<string, SubscriptionRow[]>();
+  for (const sub of subs) {
+    const existing = categoryGroups.get(sub.category) ?? [];
+    existing.push(sub);
+    categoryGroups.set(sub.category, existing);
+  }
+
+  for (const [category, categorySubs] of categoryGroups) {
+    if (categorySubs.length > 1) {
+      const { data: group } = await supabase
+        .from('overlap_groups')
+        .insert({
+          user_id: userId,
+          category: `${category.charAt(0).toUpperCase() + category.slice(1)} Overlap`,
+          description: `You have ${categorySubs.length} subscriptions in the ${category} category. Consider consolidating.`,
+        })
+        .select('id')
+        .single();
+
+      if (group) {
+        for (const sub of categorySubs) {
+          await supabase.from('overlap_members')
+            .upsert({
+              overlap_group_id: group.id,
+              subscription_id: sub.id,
+            }, { onConflict: ['overlap_group_id', 'subscription_id'].join(',') });
+        }
+      }
+    }
+  }
+
+  // Savings recommendations based on usage score
   for (const sub of subs) {
     if (sub.usage_label === 'rarely' || sub.usage_score <= 20) {
-      recs.push({
+      await supabase.from('recommendations').insert({
         user_id: userId,
         subscription_id: sub.id,
         recommendation_type: 'cancel',
-        title: `Cancel ${sub.serviceName || sub.service_name} — low usage`,
+        title: `Cancel ${sub.service_name} — low usage`,
         description: `You rarely use ${sub.service_name}. Cancelling would save PKR ${sub.price.toLocaleString()}/month.`,
         potential_savings_monthly: sub.price,
         potential_savings_yearly: sub.price * 12,
         reason_category: 'low_usage',
         urgency: sub.usage_score <= 5 ? 'high' : 'medium',
         rank: 1,
+        is_dismissed: false,
       });
     }
-  }
-
-  // Insert recommendations
-  for (const rec of recs) {
-    await supabase.from('recommendations').insert(rec);
   }
 }
