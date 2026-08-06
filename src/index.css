@@ -1,0 +1,43 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-heading: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --color-primary: oklch(0.62 0.19 233);
+  --color-on-primary: oklch(1.0 0 0);
+  --color-secondary: oklch(0.63 0.17 184);
+  --color-accent: oklch(0.78 0.19 75);
+  --color-background: oklch(0.9842 0.0034 247.86);
+  --color-foreground: oklch(0.2077 0.0398 265.75);
+  --color-muted: oklch(0.9694 0.0115 264.51);
+  --color-border: oklch(0.9418 0.0233 264.46);
+  --color-destructive: oklch(0.637 0.237 25.33);
+  --color-ring: oklch(0.62 0.19 233);
+}
+
+/* Utility classes for usage labels */
+.usage-active {
+  background-color: oklch(0.87 0.12 143.5);
+  color: oklch(0.37 0.08 143.5);
+}
+
+.usage-unused {
+  background-color: oklch(0.95 0.05 75);
+  color: oklch(0.55 0.1 75);
+}
+
+.urgency-high {
+  background-color: oklch(0.93 0.08 25.33);
+  color: oklch(0.55 0.2 25.33);
+}
+
+.urgency-medium {
+  background-color: oklch(0.95 0.08 75);
+  color: oklch(0.6 0.15 75);
+}
+
+.urgency-low {
+  background-color: oklch(0.93 0.04 230);
+  color: oklch(0.45 0.1 230);
+}
