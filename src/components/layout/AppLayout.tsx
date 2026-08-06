@@ -16,7 +16,7 @@ export default function AppLayout() {
   }, []);
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex min-h-screen bg-gradient-to-br from-sky-50 via-cyan-50 to-teal-50">
       {/* Desktop sidebar */}
       <div className="hidden md:block">
         <Sidebar />
@@ -45,7 +45,7 @@ export default function AppLayout() {
       {/* Main content */}
       <div className="flex flex-1 flex-col md:ml-64">
         {/* Mobile header */}
-        <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-border bg-white/80 px-4 backdrop-blur-sm md:hidden">
+        <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-white/20 bg-white/60 px-4 backdrop-blur-xl md:hidden">
           <button
             onClick={() => setMobileOpen((o) => !o)}
             className="cursor-pointer rounded-lg p-1.5 text-foreground/70 transition-colors duration-150 hover:bg-muted hover:text-foreground"

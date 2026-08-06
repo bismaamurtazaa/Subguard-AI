@@ -40,16 +40,16 @@ function StatCard({
     <motion.div
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      className="rounded-xl border border-border bg-white p-5 shadow-sm transition-shadow duration-200 hover:shadow-md"
+      className="glass-card p-5"
     >
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-sm text-foreground/60">{label}</p>
+          <p className="text-sm font-medium text-foreground/60">{label}</p>
           <p className={`mt-1 text-2xl font-bold ${accent}`}>{value}</p>
         </div>
         <div
-          className="flex h-10 w-10 items-center justify-center rounded-lg"
-          style={{ backgroundColor: `${accent.replace('text-', '').replace('...', '')}10` }}
+          className="flex h-10 w-10 items-center justify-center rounded-xl backdrop-blur-md"
+          style={{ backgroundColor: `${accent.replace('text-', '').replace('...', '')}15`, border: `1px solid ${accent.replace('text-', '').replace('...', '')}20` }}
         >
           <Icon className={`h-5 w-5 ${accent}`} />
         </div>
@@ -61,7 +61,7 @@ function StatCard({
 /* ────── Category Pie ────── */
 function CategoryChart({ data }: { data: { name: string; value: number }[] }) {
   return (
-    <div className="rounded-xl border border-border bg-white p-5 shadow-sm">
+    <div className="glass-card p-5">
       <h3 className="mb-4 text-sm font-semibold text-foreground">Spend by Category</h3>
       <div className="flex items-center gap-4">
         <ResponsiveContainer width="55%" height={180}>
@@ -81,8 +81,10 @@ function CategoryChart({ data }: { data: { name: string; value: number }[] }) {
             </Pie>
             <Tooltip
               contentStyle={{
-                borderRadius: 8,
-                border: '1px solid #E2E8F0',
+                borderRadius: 12,
+                border: '1px solid rgba(255,255,255,0.3)',
+                background: 'rgba(255,255,255,0.85)',
+                backdropFilter: 'blur(12px)',
                 fontSize: 13,
               }}
               formatter={(value) => `PKR ${Number(value).toLocaleString()}`}
@@ -122,12 +124,12 @@ function UpcomingRenewals() {
     .slice(0, 5);
 
   return (
-    <div className="rounded-xl border border-border bg-white p-5 shadow-sm">
+    <div className="glass-card p-5">
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-foreground">Upcoming Renewals</h3>
         <button
           onClick={() => navigate('/subscriptions')}
-          className="cursor-pointer text-xs font-medium text-primary transition-colors duration-150 hover:text-primary/80"
+          className="glass-btn cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium text-foreground/70"
         >
           View all
         </button>
@@ -147,7 +149,7 @@ function UpcomingRenewals() {
               <button
                 key={sub.id}
                 onClick={() => navigate(`/subscriptions/${sub.id}`)}
-                className="flex w-full cursor-pointer items-center justify-between rounded-lg px-3 py-2.5 transition-colors duration-150 hover:bg-muted"
+                className="flex w-full cursor-pointer items-center justify-between rounded-lg px-3 py-2.5 transition-all duration-150 hover:bg-white/20"
               >
                 <div className="flex items-center gap-3">
                   <CalendarClock className="h-4 w-4 text-foreground/40" />
@@ -184,12 +186,12 @@ function TopRecommendations() {
   const navigate = useNavigate();
 
   return (
-    <div className="rounded-xl border border-border bg-white p-5 shadow-sm">
+    <div className="glass-card p-5">
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-foreground">Top Recommendations</h3>
         <button
           onClick={() => navigate('/recommendations')}
-          className="cursor-pointer text-xs font-medium text-primary transition-colors duration-150 hover:text-primary/80"
+          className="glass-btn cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium text-foreground/70"
         >
           View all
         </button>
@@ -201,7 +203,7 @@ function TopRecommendations() {
           {recs.slice(0, 3).map((rec) => (
             <div
               key={rec.id}
-              className="rounded-lg border border-border p-3 transition-colors duration-150 hover:bg-muted"
+              className="rounded-lg border border-white/20 bg-white/20 backdrop-blur-md p-3 transition-all duration-150 hover:bg-white/30"
             >
               <div className="flex items-start gap-3">
                 <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
@@ -230,12 +232,12 @@ function RecentAlerts() {
   const recent = alerts.slice(0, 3);
 
   return (
-    <div className="rounded-xl border border-border bg-white p-5 shadow-sm">
+    <div className="glass-card p-5">
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-foreground">Recent Alerts</h3>
         <button
           onClick={() => navigate('/alerts')}
-          className="cursor-pointer text-xs font-medium text-primary transition-colors duration-150 hover:text-primary/80"
+          className="glass-btn cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium text-foreground/70"
         >
           View all
         </button>

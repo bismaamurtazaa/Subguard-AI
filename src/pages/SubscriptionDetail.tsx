@@ -38,21 +38,6 @@ export default function SubscriptionDetail() {
     );
   }
 
-  const usageColor = (label: string) => {
-    switch (label) {
-      case 'frequent':
-        return 'text-green-700 bg-green-50 border-green-200';
-      case 'moderate':
-        return 'text-blue-700 bg-blue-50 border-blue-200';
-      case 'occasional':
-        return 'text-amber-700 bg-amber-50 border-amber-200';
-      case 'rarely':
-        return 'text-red-700 bg-red-50 border-red-200';
-      default:
-        return 'text-foreground/60 bg-muted border-border';
-    }
-  };
-
   const daysUntilRenewal = sub.next_billing_date
     ? Math.ceil(
         (new Date(sub.next_billing_date).getTime() - Date.now()) /
@@ -77,7 +62,7 @@ export default function SubscriptionDetail() {
       >
         <button
           onClick={() => navigate('/subscriptions')}
-          className="flex cursor-pointer items-center gap-1.5 text-sm text-foreground/60 transition-colors duration-150 hover:text-foreground"
+          className="glass-btn flex cursor-pointer items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm text-foreground/60"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to subscriptions
@@ -92,7 +77,7 @@ export default function SubscriptionDetail() {
           className="lg:col-span-2 space-y-6"
         >
           {/* Service info */}
-          <div className="rounded-xl border border-border bg-white p-6 shadow-sm">
+          <div className="glass-card-solid p-6">
             <div className="flex items-start justify-between">
               <div>
                 <h1 className="text-2xl font-bold text-foreground">{sub.service_name}</h1>
@@ -101,7 +86,17 @@ export default function SubscriptionDetail() {
                 </p>
               </div>
               <span
-                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${usageColor(sub.usage_label)}`}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium backdrop-blur-md ${
+                sub.usage_label === 'frequent'
+                  ? 'text-green-700 bg-green-500/10 border-green-500/20'
+                  : sub.usage_label === 'moderate'
+                    ? 'text-blue-700 bg-blue-500/10 border-blue-500/20'
+                    : sub.usage_label === 'occasional'
+                      ? 'text-amber-700 bg-amber-500/10 border-amber-500/20'
+                      : sub.usage_label === 'rarely'
+                        ? 'text-red-700 bg-red-500/10 border-red-500/20'
+                        : 'text-foreground/60 bg-white/20 border-white/20'
+              }`}
               >
                 <Circle className="h-2 w-2 fill-current" />
                 {sub.usage_label === 'frequent'
@@ -140,7 +135,7 @@ export default function SubscriptionDetail() {
                   href={sub.cancellation_link}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 rounded-lg border border-border bg-white px-4 py-2 text-sm font-medium text-foreground/80 transition-colors duration-150 hover:bg-muted"
+                  className="glass-btn inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-foreground/80"
                 >
                   <ExternalLink className="h-4 w-4" />
                   Cancellation page
@@ -151,7 +146,7 @@ export default function SubscriptionDetail() {
                   href={`https://www.google.com/search?q=${encodeURIComponent(sub.service_name)}+cancel+subscription`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 rounded-lg border border-border bg-white px-4 py-2 text-sm font-medium text-foreground/80 transition-colors duration-150 hover:bg-muted"
+                  className="glass-btn inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-foreground/80"
                 >
                   <ExternalLink className="h-4 w-4" />
                   Search cancel steps
@@ -160,7 +155,7 @@ export default function SubscriptionDetail() {
               {sub.status === 'active' && (
                 <button
                   onClick={handleCancel}
-                  className="cursor-pointer rounded-lg bg-destructive px-4 py-2 text-sm font-medium text-white transition-all duration-150 active:scale-[0.97] hover:opacity-90"
+                  className="glass-btn-danger cursor-pointer rounded-xl px-4 py-2 text-sm font-medium transition-all duration-150 active:scale-[0.97]"
                 >
                   Mark as Canceled
                 </button>
@@ -169,7 +164,7 @@ export default function SubscriptionDetail() {
           </div>
 
           {/* Usage signals timeline */}
-          <div className="rounded-xl border border-border bg-white p-6 shadow-sm">
+          <div className="glass-card-solid p-6">
             <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground">
               <Activity className="h-4 w-4 text-primary" />
               Usage Signals
@@ -181,8 +176,8 @@ export default function SubscriptionDetail() {
                 {signals.map((signal) => (
                   <div key={signal.id} className="relative flex items-start gap-4">
                     <div className="flex flex-col items-center">
-                      <div className="h-2.5 w-2.5 rounded-full bg-primary/30" />
-                      <div className="mt-1 h-full w-px bg-border" />
+                      <div className="h-2.5 w-2.5 rounded-full bg-primary/40 backdrop-blur-md ring-1 ring-white/30" />
+                      <div className="mt-1 h-full w-px bg-white/10" />
                     </div>
                     <div className="min-w-0 flex-1 pb-4">
                       <p className="text-sm font-medium text-foreground">
@@ -213,7 +208,7 @@ export default function SubscriptionDetail() {
           className="space-y-6"
         >
           {/* Overlap groups */}
-          <div className="rounded-xl border border-border bg-white p-5 shadow-sm">
+          <div className="glass-card-solid p-5">
             <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
               <Layers className="h-4 w-4 text-primary" />
               Overlaps
@@ -225,9 +220,9 @@ export default function SubscriptionDetail() {
                 {overlaps.map((group) => (
                   <div
                     key={group.id}
-                    className="rounded-lg border border-amber-200 bg-amber-50/50 p-3"
+                    className="rounded-lg border border-amber-500/20 bg-amber-500/5 backdrop-blur-md p-3"
                   >
-                    <p className="flex items-center gap-1.5 text-xs font-semibold text-amber-800">
+                    <p className="flex items-center gap-1.5 text-xs font-semibold text-amber-700">
                       <AlertTriangle className="h-3.5 w-3.5" />
                       {group.category}
                     </p>
@@ -237,7 +232,7 @@ export default function SubscriptionDetail() {
                           <button
                             key={s.id}
                             onClick={() => navigate(`/subscriptions/${s.id}`)}
-                            className="flex w-full cursor-pointer items-center justify-between rounded px-2 py-1 text-xs transition-colors duration-150 hover:bg-amber-100/50"
+                            className="flex w-full cursor-pointer items-center justify-between rounded px-2 py-1 text-xs transition-colors duration-150 hover:bg-amber-500/10"
                           >
                             <span className={s.id === sub.id ? 'font-semibold text-foreground' : 'text-foreground/70'}>
                               {s.service_name}
@@ -256,7 +251,7 @@ export default function SubscriptionDetail() {
           </div>
 
           {/* Quick info */}
-          <div className="rounded-xl border border-border bg-white p-5 shadow-sm">
+          <div className="glass-card-solid p-5">
             <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
               <Tag className="h-4 w-4 text-primary" />
               Details
@@ -303,7 +298,7 @@ export default function SubscriptionDetail() {
 
 function InfoTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg bg-muted p-3">
+    <div className="rounded-lg bg-white/20 backdrop-blur-md border border-white/20 p-3">
       <p className="text-xs text-foreground/50">{label}</p>
       <p className="mt-0.5 text-sm font-semibold text-foreground">{value}</p>
     </div>

@@ -85,7 +85,7 @@ export default function SettingsPage() {
         <motion.section
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-xl border border-border bg-white p-6 shadow-sm"
+          className="glass-card-solid p-6"
         >
           <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground">
             <User className="h-4 w-4 text-primary" />
@@ -115,17 +115,17 @@ export default function SettingsPage() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
-          className="rounded-xl border border-border bg-white p-6 shadow-sm"
+          className="glass-card-solid p-6"
         >
           <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground">
             <Mail className="h-4 w-4 text-primary" />
             Connected Accounts
           </h2>
 
-          <div className="rounded-lg border border-border bg-muted/50 p-4">
+          <div className="rounded-xl border border-white/20 bg-white/20 backdrop-blur-md p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10 backdrop-blur-md border border-blue-500/20 text-blue-600">
                   <Mail className="h-5 w-5" />
                 </div>
                 <div>
@@ -143,18 +143,18 @@ export default function SettingsPage() {
               </div>
 
               {gmailConnected ? (
-                <span className="rounded-full bg-green-50 px-3 py-1 text-[11px] font-semibold text-green-700">
+                <span className="rounded-full bg-green-500/10 backdrop-blur-md border border-green-500/20 px-3 py-1 text-[11px] font-semibold text-green-700">
                   Connected
                 </span>
               ) : (
-                <span className="rounded-full bg-amber-50 px-3 py-1 text-[11px] font-semibold text-amber-700">
+                <span className="rounded-full bg-amber-500/10 backdrop-blur-md border border-amber-500/20 px-3 py-1 text-[11px] font-semibold text-amber-700">
                   Not connected
                 </span>
               )}
             </div>
 
             {/* Scan Now / Connect section */}
-            <div className="mt-3 border-t border-border pt-3">
+            <div className="mt-3 border-t border-white/20 pt-3">
               {authLoading ? (
                 <div className="flex items-center justify-center py-2">
                   <LoaderCircle className="h-4 w-4 animate-spin text-foreground/40" />
@@ -168,7 +168,7 @@ export default function SettingsPage() {
                   </p>
                   <button
                     onClick={signInWithGoogle}
-                    className="flex cursor-pointer items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-on-primary transition-all duration-150 hover:opacity-90 active:scale-[0.97]"
+                    className="flex cursor-pointer items-center gap-2 glass-btn-primary rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-150 active:scale-[0.97]"
                   >
                     <Plug className="h-4 w-4" />
                     Sign in with Google
@@ -183,7 +183,7 @@ export default function SettingsPage() {
                   </p>
                   <button
                     onClick={signInWithGoogle}
-                    className="flex cursor-pointer items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-on-primary transition-all duration-150 hover:opacity-90 active:scale-[0.97]"
+                    className="flex cursor-pointer items-center gap-2 glass-btn-primary rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-150 active:scale-[0.97]"
                   >
                     <Plug className="h-4 w-4" />
                     Connect Gmail
@@ -209,7 +209,7 @@ export default function SettingsPage() {
                   <button
                     onClick={handleScan}
                     disabled={scanning}
-                    className="flex cursor-pointer items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-on-primary transition-all duration-150 hover:opacity-90 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex cursor-pointer items-center gap-2 glass-btn-primary rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-150 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {scanning ? (
                       <LoaderCircle className="h-4 w-4 animate-spin" />
@@ -222,10 +222,10 @@ export default function SettingsPage() {
                   {/* Scan result */}
                   {scanResult && (
                     <div
-                      className={`rounded-lg px-3 py-2 text-xs ${
+                      className={`rounded-xl px-3 py-2 text-xs backdrop-blur-md border ${
                         scanResult.success
-                          ? 'bg-green-50 text-green-700'
-                          : 'bg-red-50 text-red-700'
+                          ? 'bg-green-500/10 border-green-500/20 text-green-700'
+                          : 'bg-red-500/10 border-red-500/20 text-red-700'
                       }`}
                     >
                       {scanResult.success ? (
@@ -266,7 +266,7 @@ export default function SettingsPage() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="rounded-xl border border-border bg-white p-6 shadow-sm"
+          className="glass-card-solid p-6"
         >
           <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground">
             <DollarSign className="h-4 w-4 text-primary" />
@@ -279,7 +279,7 @@ export default function SettingsPage() {
                 setCurrency(e.target.value);
                 setSaved(false);
               }}
-              className="rounded-lg border border-border bg-white px-3 py-2.5 text-sm text-foreground transition-colors duration-150 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+              className="glass-input rounded-xl px-3 py-2.5 text-sm text-foreground"
             >
               <option value="PKR">PKR — Pakistani Rupee</option>
               <option value="USD">USD — US Dollar</option>
@@ -290,7 +290,7 @@ export default function SettingsPage() {
             <button
               onClick={handleSaveCurrency}
               disabled={saving}
-              className="flex cursor-pointer items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-on-primary transition-all duration-150 hover:opacity-90 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex cursor-pointer items-center gap-2 glass-btn-primary rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-150 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {saving ? (
                 <LoaderCircle className="h-4 w-4 animate-spin" />
@@ -307,7 +307,7 @@ export default function SettingsPage() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15 }}
-          className="rounded-xl border border-border bg-white p-6 shadow-sm"
+          className="glass-card-solid p-6"
         >
           <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground">
             <Shield className="h-4 w-4 text-primary" />
@@ -334,7 +334,7 @@ export default function SettingsPage() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="rounded-xl border border-destructive/30 bg-red-50/30 p-6 shadow-sm"
+          className="rounded-xl border border-destructive/30 bg-destructive/5 backdrop-blur-md p-6"
         >
           <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-destructive">
             <LogOut className="h-4 w-4" />
@@ -343,7 +343,7 @@ export default function SettingsPage() {
           <p className="mb-4 text-xs text-foreground/50">
             These actions are irreversible. Proceed with caution.
           </p>
-          <button className="cursor-pointer rounded-lg border border-destructive/50 px-4 py-2 text-sm font-medium text-destructive transition-colors duration-150 hover:bg-destructive/5">
+          <button className="glass-btn-danger cursor-pointer rounded-xl px-4 py-2 text-sm font-medium transition-all duration-150 active:scale-[0.97]">
             Delete Account
           </button>
         </motion.section>

@@ -32,12 +32,12 @@ export default function Sidebar() {
 
   return (
     <aside
-      className="fixed inset-y-0 left-0 z-30 flex w-64 flex-col border-r border-border bg-white"
+      className="fixed inset-y-0 left-0 z-30 flex w-64 flex-col border-r border-white/20 bg-white/60 backdrop-blur-xl"
       role="navigation"
       aria-label="Main navigation"
     >
       {/* Brand */}
-      <div className="flex h-16 items-center gap-3 border-b border-border px-6">
+      <div className="flex h-16 items-center gap-3 border-b border-white/20 px-6">
         {avatarUrl ? (
           <img
             src={avatarUrl}
@@ -62,10 +62,10 @@ export default function Sidebar() {
             to={to}
             end={to === '/'}
             className={({ isActive }) =>
-              `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors duration-150 ${
+              `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
                 isActive
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-foreground/70 hover:bg-muted hover:text-foreground'
+                  ? 'bg-primary/15 text-primary shadow-sm'
+                  : 'text-foreground/70 hover:bg-white/30 hover:text-foreground'
               }`
             }
           >
@@ -84,7 +84,7 @@ export default function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="border-t border-border px-6 py-4">
+      <div className="border-t border-white/20 px-6 py-4">
         <p className="text-xs text-foreground/50">SubGuard AI &middot; v1.0</p>
       </div>
     </aside>
