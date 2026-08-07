@@ -105,7 +105,7 @@ export function useRecommendations(): Recommendation[] {
         ? dbRecs
         : [...mockRecommendations]
             .filter((r) => !r.is_dismissed)
-            .sort((a, b) => a.rank - b.rank),
+            .sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0)),
     [isAuth, dbRecs],
   );
 }
@@ -137,7 +137,7 @@ export function useAlerts(): RenewalAlert[] {
         ? dbAlerts
         : [...mockAlerts].sort(
             (a, b) =>
-              new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+              new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime(),
           ),
     [isAuth, dbAlerts],
   );
@@ -261,7 +261,7 @@ export function useDashboardStats() {
     const urgentAlerts = alerts.filter((a) => !a.is_read && a.urgency === 'high').length;
     const totalSavingsPossible = recs
       .filter((r) => !r.is_dismissed)
-      .reduce((sum, r) => sum + r.potential_savings_monthly, 0);
+      .reduce((sum, r) => sum + (r.potential_savings_monthly ?? 0), 0);
 
     return {
       activeCount: active.length,

@@ -9,17 +9,45 @@ export default function AuthCallback() {
 
   useEffect(() => {
     const handleCallback = async () => {
-      const { data, error } = await supabase.auth.getSession();
-      if (error) {
-        setError(error.message);
+      const { data, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) {
+        setError(sessionError.message);
         return;
       }
-      if (data.session) {
-        navigate('/', { replace: true });
-      } else {
+      if (!data.session) {
         setError('No session found. Please try signing in again.');
+        return;
+      }
+
+      const session = data.session;
+      const userId = session.user.id;
+      const gmailEmail = session.user.email ?? null;
+      const providerRefreshToken = session.provider_refresh_token ?? null;
+
+      try {
+        // 1. Ensure a profile row exists (FK constraint for user_gmail_tokens)
+        await supabase.from('profiles').upsert({
+          id: userId,
+          display_name: session.user.user_metadata?.full_name ?? null,
+          avatar_url: session.user.user_metadata?.avatar_url ?? null,
+        }, { onConflict: 'id' });
+
+        // 2. Store the Gmail connection details so gmailConnected shows as "Connected"
+        await supabase.from('user_gmail_tokens').upsert({
+          user_id: userId,
+          gmail_email: gmailEmail,
+          provider_refresh_token: providerRefreshToken,
+        }, { onConflict: 'user_id' });
+
+        // 3. Navigate to dashboard
+        navigate('/', { replace: true });
+      } catch (err) {
+        console.error('Error storing Gmail tokens after OAuth:', err);
+        // Even if storing fails, navigate so the user isn't stuck
+        navigate('/', { replace: true });
       }
     };
+
     handleCallback();
   }, [navigate]);
 

@@ -190,9 +190,9 @@ export default function Subscriptions() {
                   </p>
                 </div>
                 <span
-                  className={`ml-2 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${statusBadge(sub.status)}`}
+                  className={`ml-2 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${statusBadge(sub.status ?? 'active')}`}
                 >
-                  {sub.status}
+                  {sub.status ?? 'active'}
                 </span>
               </div>
 
@@ -207,14 +207,14 @@ export default function Subscriptions() {
               {/* Bottom row */}
               <div className="flex items-center justify-between">
                 <span
-                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${usageColor(sub.usage_label)}`}
+                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${usageColor(sub.usage_label ?? 'rarely')}`}
                 >
                   <Circle className="h-1.5 w-1.5 fill-current" />
                   {sub.usage_label === 'frequent'
                     ? 'Likely Active'
                     : sub.usage_label === 'rarely'
                       ? 'Possibly Unused'
-                      : sub.usage_label.charAt(0).toUpperCase() + sub.usage_label.slice(1)}
+                      : (sub.usage_label ?? 'rarely').charAt(0).toUpperCase() + (sub.usage_label ?? 'rarely').slice(1)}
                 </span>
                 {sub.next_billing_date && (
                   <span className="text-[11px] text-foreground/40">

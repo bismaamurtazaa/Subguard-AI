@@ -81,13 +81,13 @@ export default function Recommendations() {
         </div>
         <div className="text-center">
           <p className="text-2xl font-bold text-green-600">
-            PKR {visible.reduce((s, r) => s + r.potential_savings_monthly, 0).toLocaleString()}
+            PKR {visible.reduce((s, r) => s + (r.potential_savings_monthly ?? 0), 0).toLocaleString()}
           </p>
           <p className="text-xs text-foreground/50">Potential savings / mo</p>
         </div>
         <div className="text-center">
           <p className="text-2xl font-bold text-amber-600">
-            PKR {visible.reduce((s, r) => s + r.potential_savings_yearly, 0).toLocaleString()}
+            PKR {visible.reduce((s, r) => s + (r.potential_savings_yearly ?? 0), 0).toLocaleString()}
           </p>
           <p className="text-xs text-foreground/50">Potential savings / yr</p>
         </div>
@@ -110,13 +110,15 @@ export default function Recommendations() {
           className="space-y-4"
         >
           {visible.map((rec) => {
-            const Icon = typeIcons[rec.recommendation_type] ?? Sparkles;
+            const recType = rec.recommendation_type ?? 'investigate';
+            const Icon = typeIcons[recType] ?? Sparkles;
+            const urg = rec.urgency ?? 'low';
             return (
               <motion.div
                 key={rec.id}
                 variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
                 className={`glass-card overflow-hidden transition-all duration-200 hover:-translate-y-0.5 ${
-                  rec.urgency === 'high' ? 'ring-1 ring-destructive/30' : ''
+                  urg === 'high' ? 'ring-1 ring-destructive/30' : ''
                 }`}
               >
                 {/* Urgency header bar */}
@@ -124,14 +126,14 @@ export default function Recommendations() {
                   <div className="flex items-center gap-2">
                     <span
                       className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase ${
-                        rec.urgency === 'high'
+                        urg === 'high'
                           ? 'bg-red-100 text-red-700'
-                          : rec.urgency === 'medium'
+                          : urg === 'medium'
                             ? 'bg-amber-100 text-amber-700'
                             : 'bg-blue-100 text-blue-700'
                       }`}
                     >
-                      {urgencyLabels[rec.urgency]}
+                      {urgencyLabels[urg]}
                     </span>
                     <span
                       className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase ${
@@ -171,13 +173,13 @@ export default function Recommendations() {
                         <div className="rounded-xl bg-green-500/10 backdrop-blur-md border border-green-500/20 px-3 py-2">
                           <p className="text-xs text-green-600/70">Save monthly</p>
                           <p className="text-lg font-bold text-green-700">
-                            PKR {rec.potential_savings_monthly.toLocaleString()}
+                            PKR {(rec.potential_savings_monthly ?? 0).toLocaleString()}
                           </p>
                         </div>
                         <div className="rounded-xl bg-blue-500/10 backdrop-blur-md border border-blue-500/20 px-3 py-2">
                           <p className="text-xs text-blue-600/70">Save yearly</p>
                           <p className="text-lg font-bold text-blue-700">
-                            PKR {rec.potential_savings_yearly.toLocaleString()}
+                            PKR {(rec.potential_savings_yearly ?? 0).toLocaleString()}
                           </p>
                         </div>
                       </div>

@@ -1,158 +1,540 @@
-export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[]
 
-export interface Database {
+export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.15"
+  }
   public: {
     Tables: {
-      profiles: {
-        Row: Profile;
-        Insert: Omit<Profile, 'created_at'>;
-        Update: Partial<Omit<Profile, 'id' | 'created_at'>>;
-      };
-      user_gmail_tokens: {
-        Row: UserGmailToken;
-        Insert: Omit<UserGmailToken, 'id' | 'created_at'>;
-        Update: Partial<Omit<UserGmailToken, 'id' | 'created_at'>>;
-      };
       detected_emails: {
-        Row: DetectedEmail;
-        Insert: Omit<DetectedEmail, 'id' | 'created_at'>;
-        Update: Partial<Omit<DetectedEmail, 'id' | 'created_at'>>;
-      };
-      subscriptions: {
-        Row: Subscription;
-        Insert: Omit<Subscription, 'id' | 'created_at' | 'updated_at'>;
-        Update: Partial<Omit<Subscription, 'id' | 'created_at' | 'updated_at'>>;
-      };
-      usage_signals: {
-        Row: UsageSignal;
-        Insert: Omit<UsageSignal, 'id' | 'created_at'>;
-        Update: Partial<Omit<UsageSignal, 'id' | 'created_at'>>;
-      };
+        Row: {
+          category: string | null
+          created_at: string | null
+          from_address: string | null
+          gmail_message_id: string | null
+          id: string
+          is_processed: boolean | null
+          received_at: string | null
+          snippet: string | null
+          subject: string | null
+          user_id: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string | null
+          from_address?: string | null
+          gmail_message_id?: string | null
+          id?: string
+          is_processed?: boolean | null
+          received_at?: string | null
+          snippet?: string | null
+          subject?: string | null
+          user_id: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string | null
+          from_address?: string | null
+          gmail_message_id?: string | null
+          id?: string
+          is_processed?: boolean | null
+          received_at?: string | null
+          snippet?: string | null
+          subject?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "detected_emails_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       overlap_groups: {
-        Row: OverlapGroup;
-        Insert: Omit<OverlapGroup, 'id' | 'created_at'>;
-        Update: Partial<Omit<OverlapGroup, 'id' | 'created_at'>>;
-      };
+        Row: {
+          category: string
+          created_at: string | null
+          description: string | null
+          id: string
+          user_id: string
+        }
+        Insert: {
+          category: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          user_id: string
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "overlap_groups_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       overlap_members: {
-        Row: OverlapMember;
-        Insert: Omit<OverlapMember, 'id' | 'created_at'>;
-        Update: Partial<Omit<OverlapMember, 'id' | 'created_at'>>;
-      };
+        Row: {
+          created_at: string | null
+          id: string
+          overlap_group_id: string
+          subscription_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          overlap_group_id: string
+          subscription_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          overlap_group_id?: string
+          subscription_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "overlap_members_overlap_group_id_fkey"
+            columns: ["overlap_group_id"]
+            isOneToOne: false
+            referencedRelation: "overlap_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "overlap_members_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string | null
+          currency: string | null
+          display_name: string | null
+          id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string | null
+          currency?: string | null
+          display_name?: string | null
+          id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string | null
+          currency?: string | null
+          display_name?: string | null
+          id?: string
+        }
+        Relationships: []
+      }
       recommendations: {
-        Row: Recommendation;
-        Insert: Omit<Recommendation, 'id' | 'created_at'>;
-        Update: Partial<Omit<Recommendation, 'id' | 'created_at'>>;
-      };
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          is_dismissed: boolean | null
+          potential_savings_monthly: number | null
+          potential_savings_yearly: number | null
+          rank: number | null
+          reason_category: string | null
+          recommendation_type: string | null
+          subscription_id: string | null
+          title: string
+          urgency: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_dismissed?: boolean | null
+          potential_savings_monthly?: number | null
+          potential_savings_yearly?: number | null
+          rank?: number | null
+          reason_category?: string | null
+          recommendation_type?: string | null
+          subscription_id?: string | null
+          title: string
+          urgency?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_dismissed?: boolean | null
+          potential_savings_monthly?: number | null
+          potential_savings_yearly?: number | null
+          rank?: number | null
+          reason_category?: string | null
+          recommendation_type?: string | null
+          subscription_id?: string | null
+          title?: string
+          urgency?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recommendations_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recommendations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       renewal_alerts: {
-        Row: RenewalAlert;
-        Insert: Omit<RenewalAlert, 'id' | 'created_at'>;
-        Update: Partial<Omit<RenewalAlert, 'id' | 'created_at'>>;
-      };
-    };
-  };
+        Row: {
+          alert_type: string | null
+          created_at: string | null
+          days_before: number | null
+          id: string
+          is_read: boolean | null
+          message: string | null
+          scheduled_at: string | null
+          subscription_id: string
+          title: string
+          urgency: string | null
+          user_id: string
+        }
+        Insert: {
+          alert_type?: string | null
+          created_at?: string | null
+          days_before?: number | null
+          id?: string
+          is_read?: boolean | null
+          message?: string | null
+          scheduled_at?: string | null
+          subscription_id: string
+          title: string
+          urgency?: string | null
+          user_id: string
+        }
+        Update: {
+          alert_type?: string | null
+          created_at?: string | null
+          days_before?: number | null
+          id?: string
+          is_read?: boolean | null
+          message?: string | null
+          scheduled_at?: string | null
+          subscription_id?: string
+          title?: string
+          urgency?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "renewal_alerts_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "renewal_alerts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subscriptions: {
+        Row: {
+          billing_cycle: string | null
+          cancellation_link: string | null
+          category: string | null
+          created_at: string | null
+          currency: string | null
+          detected_email_id: string | null
+          id: string
+          is_manually_added: boolean | null
+          next_billing_date: string | null
+          price: number
+          service_name: string
+          status: string | null
+          trial_end_date: string | null
+          updated_at: string | null
+          usage_label: string | null
+          usage_score: number | null
+          user_id: string
+        }
+        Insert: {
+          billing_cycle?: string | null
+          cancellation_link?: string | null
+          category?: string | null
+          created_at?: string | null
+          currency?: string | null
+          detected_email_id?: string | null
+          id?: string
+          is_manually_added?: boolean | null
+          next_billing_date?: string | null
+          price: number
+          service_name: string
+          status?: string | null
+          trial_end_date?: string | null
+          updated_at?: string | null
+          usage_label?: string | null
+          usage_score?: number | null
+          user_id: string
+        }
+        Update: {
+          billing_cycle?: string | null
+          cancellation_link?: string | null
+          category?: string | null
+          created_at?: string | null
+          currency?: string | null
+          detected_email_id?: string | null
+          id?: string
+          is_manually_added?: boolean | null
+          next_billing_date?: string | null
+          price?: number
+          service_name?: string
+          status?: string | null
+          trial_end_date?: string | null
+          updated_at?: string | null
+          usage_label?: string | null
+          usage_score?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_detected_email_id_fkey"
+            columns: ["detected_email_id"]
+            isOneToOne: false
+            referencedRelation: "detected_emails"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriptions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      usage_signals: {
+        Row: {
+          created_at: string | null
+          detected_email_id: string | null
+          id: string
+          signal_date: string | null
+          signal_summary: string | null
+          signal_type: string | null
+          subscription_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          detected_email_id?: string | null
+          id?: string
+          signal_date?: string | null
+          signal_summary?: string | null
+          signal_type?: string | null
+          subscription_id: string
+        }
+        Update: {
+          created_at?: string | null
+          detected_email_id?: string | null
+          id?: string
+          signal_date?: string | null
+          signal_summary?: string | null
+          signal_type?: string | null
+          subscription_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "usage_signals_detected_email_id_fkey"
+            columns: ["detected_email_id"]
+            isOneToOne: false
+            referencedRelation: "detected_emails"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "usage_signals_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_gmail_tokens: {
+        Row: {
+          created_at: string | null
+          gmail_email: string | null
+          id: string
+          last_scan_at: string | null
+          provider_refresh_token: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          gmail_email?: string | null
+          id?: string
+          last_scan_at?: string | null
+          provider_refresh_token?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          gmail_email?: string | null
+          id?: string
+          last_scan_at?: string | null
+          provider_refresh_token?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_gmail_tokens_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      [_ in never]: never
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
 }
 
-export interface Profile {
-  id: string;
-  display_name: string | null;
-  avatar_url: string | null;
-  currency: string;
-  created_at: string;
-}
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
 
-export interface UserGmailToken {
-  id: string;
-  user_id: string;
-  provider_refresh_token: string | null;
-  gmail_email: string | null;
-  last_scan_at: string | null;
-  created_at: string;
-}
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
-export interface DetectedEmail {
-  id: string;
-  user_id: string;
-  gmail_message_id: string | null;
-  from_address: string | null;
-  subject: string | null;
-  snippet: string | null;
-  received_at: string | null;
-  category: string;
-  is_processed: boolean;
-  created_at: string;
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
 }
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
 
-export interface Subscription {
-  id: string;
-  user_id: string;
-  service_name: string;
-  price: number;
-  currency: string;
-  billing_cycle: string;
-  category: string;
-  status: string;
-  next_billing_date: string | null;
-  trial_end_date: string | null;
-  detected_email_id: string | null;
-  is_manually_added: boolean;
-  cancellation_link: string | null;
-  usage_score: number;
-  usage_label: string;
-  created_at: string;
-  updated_at: string;
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
 }
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
 
-export interface UsageSignal {
-  id: string;
-  subscription_id: string;
-  signal_type: string;
-  detected_email_id: string | null;
-  signal_date: string | null;
-  signal_summary: string | null;
-  created_at: string;
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
 }
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
 
-export interface OverlapGroup {
-  id: string;
-  user_id: string;
-  category: string;
-  description: string | null;
-  created_at: string;
-}
+/* ──────────── Named row types (backward-compatible with app imports) ──────────── */
 
-export interface OverlapMember {
-  id: string;
-  overlap_group_id: string;
-  subscription_id: string;
-  created_at: string;
-}
-
-export interface Recommendation {
-  id: string;
-  user_id: string;
-  subscription_id: string | null;
-  recommendation_type: string;
-  title: string;
-  description: string | null;
-  potential_savings_monthly: number;
-  potential_savings_yearly: number;
-  reason_category: string;
-  urgency: string;
-  is_dismissed: boolean;
-  rank: number;
-  created_at: string;
-}
-
-export interface RenewalAlert {
-  id: string;
-  user_id: string;
-  subscription_id: string;
-  alert_type: string;
-  days_before: number;
-  urgency: string;
-  title: string;
-  message: string | null;
-  is_read: boolean;
-  created_at: string;
-  scheduled_at: string | null;
-}
+export type Profile = Tables<'profiles'>;
+export type UserGmailToken = Tables<'user_gmail_tokens'>;
+export type DetectedEmail = Tables<'detected_emails'>;
+export type Subscription = Tables<'subscriptions'>;
+export type UsageSignal = Tables<'usage_signals'>;
+export type OverlapGroup = Tables<'overlap_groups'>;
+export type OverlapMember = Tables<'overlap_members'>;
+export type Recommendation = Tables<'recommendations'>;
+export type RenewalAlert = Tables<'renewal_alerts'>;

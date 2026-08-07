@@ -541,7 +541,7 @@ export function getDashboardStats() {
   const urgentAlerts = mockAlerts.filter((a) => !a.is_read && a.urgency === 'high').length;
   const totalSavingsPossible = mockRecommendations
     .filter((r) => !r.is_dismissed)
-    .reduce((sum, r) => sum + r.potential_savings_monthly, 0);
+    .reduce((sum, r) => sum + (r.potential_savings_monthly ?? 0), 0);
 
   return {
     activeCount: active.length,

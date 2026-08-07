@@ -104,7 +104,8 @@ export default function Alerts() {
         >
           {alerts.map((alert) => {
             const isRead = readIds.has(alert.id) || alert.is_read;
-            const Icon = urgencyIcon(alert.urgency);
+            const urg = alert.urgency ?? 'low';
+            const Icon = urgencyIcon(urg);
             return (
               <motion.div
                 key={alert.id}
@@ -117,9 +118,9 @@ export default function Alerts() {
                   {/* Urgency indicator */}
                   <div
                     className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl backdrop-blur-md border ${
-                      alert.urgency === 'high'
+                      urg === 'high'
                         ? 'bg-red-500/10 border-red-500/20 text-destructive'
-                        : alert.urgency === 'medium'
+                        : urg === 'medium'
                           ? 'bg-amber-500/10 border-amber-500/20 text-accent'
                           : 'bg-blue-500/10 border-blue-500/20 text-primary'
                     }`}
@@ -133,9 +134,9 @@ export default function Alerts() {
                       <div>
                         <h3 className="text-sm font-semibold text-foreground">{alert.title}</h3>
                         <span
-                          className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${urgencyBadge[alert.urgency]}`}
+                          className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${urgencyBadge[urg]}`}
                         >
-                          {alert.urgency}
+                          {urg}
                         </span>
                       </div>
                       {!isRead && (
@@ -154,7 +155,7 @@ export default function Alerts() {
                     )}
 
                     <div className="mt-3 flex items-center gap-3 text-xs text-foreground/40">
-                      <span>{new Date(alert.created_at).toLocaleDateString('en-GB', {
+                      <span>{new Date(alert.created_at ?? Date.now()).toLocaleDateString('en-GB', {
                         day: 'numeric',
                         month: 'short',
                         year: 'numeric',

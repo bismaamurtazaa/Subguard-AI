@@ -214,7 +214,7 @@ function TopRecommendations() {
                   </p>
                 </div>
                 <span className="shrink-0 text-sm font-bold text-green-600">
-                  -PKR {rec.potential_savings_monthly.toLocaleString()}/mo
+                  -PKR {(rec.potential_savings_monthly ?? 0).toLocaleString()}/mo
                 </span>
               </div>
             </div>
@@ -282,7 +282,7 @@ export default function Dashboard() {
   subs
     .filter((s) => s.status === 'active')
     .forEach((s) => {
-      const cat = s.category.charAt(0).toUpperCase() + s.category.slice(1);
+      const cat = (s.category ?? 'other').charAt(0).toUpperCase() + (s.category ?? 'other').slice(1);
       const monthly =
         s.billing_cycle === 'yearly' ? s.price / 12 : s.price;
       categoryMap.set(cat, (categoryMap.get(cat) ?? 0) + monthly);

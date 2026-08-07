@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 import { supabase } from './supabase';
-import type { User } from '@supabase/supabase-js';
+import type { User, Session } from '@supabase/supabase-js';
 
 interface AuthState {
   user: User | null;
@@ -25,6 +25,35 @@ const AuthContext = createContext<AuthState>({
   signOut: async () => {},
   refreshSession: async () => {},
 });
+
+/**
+ * After a successful Google OAuth, store the Gmail connection details
+ * so that fetchGmailStatus() finds a row in user_gmail_tokens.
+ * Also ensures a profile row exists (FK requirement).
+ */
+async function storeGmailConnection(session: Session) {
+  const userId = session.user.id;
+  const gmailEmail = session.user.email ?? null;
+  const providerRefreshToken = session.provider_refresh_token ?? null;
+
+  try {
+    // Ensure a profile row exists (FK constraint for user_gmail_tokens)
+    await supabase.from('profiles').upsert({
+      id: userId,
+      display_name: session.user.user_metadata?.full_name ?? null,
+      avatar_url: session.user.user_metadata?.avatar_url ?? null,
+    }, { onConflict: 'id' });
+
+    // Store the Gmail connection
+    await supabase.from('user_gmail_tokens').upsert({
+      user_id: userId,
+      gmail_email: gmailEmail,
+      provider_refresh_token: providerRefreshToken,
+    }, { onConflict: 'user_id' });
+  } catch (err) {
+    console.error('Error storing Gmail connection after OAuth:', err);
+  }
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -66,7 +95,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (session) {
         setUser(session.user);
         setProviderToken(session.provider_token ?? null);
-        fetchGmailStatus(session.user.id);
+        // If this is a Google OAuth session with a provider token, ensure tokens are stored
+        if (session.provider_token) {
+          storeGmailConnection(session).then(() => {
+            fetchGmailStatus(session.user.id);
+          });
+        } else {
+          fetchGmailStatus(session.user.id);
+        }
       }
       setLoading(false);
     });
@@ -76,7 +112,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (session) {
           setUser(session.user);
           setProviderToken(session.provider_token ?? null);
-          fetchGmailStatus(session.user.id);
+          // When signing in via Google OAuth, store the Gmail connection
+          // so gmailConnected becomes true immediately
+          if (session.provider_token) {
+            storeGmailConnection(session).then(() => {
+              fetchGmailStatus(session.user.id);
+            });
+          } else {
+            fetchGmailStatus(session.user.id);
+          }
         } else {
           setUser(null);
           setProviderToken(null);

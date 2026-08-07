@@ -103,7 +103,7 @@ export default function SubscriptionDetail() {
                   ? 'Likely Active'
                   : sub.usage_label === 'rarely'
                     ? 'Possibly Unused'
-                    : sub.usage_label.charAt(0).toUpperCase() + sub.usage_label.slice(1)}
+                    : (sub.usage_label ?? 'moderate').charAt(0).toUpperCase() + (sub.usage_label ?? 'moderate').slice(1)}
               </span>
             </div>
 
@@ -270,7 +270,7 @@ export default function SubscriptionDetail() {
               <div className="flex justify-between">
                 <dt className="text-foreground/50">Created</dt>
                 <dd className="font-medium text-foreground">
-                  {new Date(sub.created_at).toLocaleDateString('en-GB', {
+                  {new Date(sub.created_at ?? Date.now()).toLocaleDateString('en-GB', {
                     day: 'numeric',
                     month: 'short',
                   })}
