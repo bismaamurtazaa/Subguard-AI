@@ -36,22 +36,34 @@ async function storeGmailConnection(session: Session) {
   const gmailEmail = session.user.email ?? null;
   const providerRefreshToken = session.provider_refresh_token ?? null;
 
-  try {
-    // Ensure a profile row exists (FK constraint for user_gmail_tokens)
-    await supabase.from('profiles').upsert({
-      id: userId,
-      display_name: session.user.user_metadata?.full_name ?? null,
-      avatar_url: session.user.user_metadata?.avatar_url ?? null,
-    }, { onConflict: 'id' });
+  console.log('[storeGmailConnection] Saving Gmail connection:', {
+    userId,
+    gmailEmail,
+    hasProviderRefreshToken: !!providerRefreshToken,
+  });
 
-    // Store the Gmail connection
-    await supabase.from('user_gmail_tokens').upsert({
-      user_id: userId,
-      gmail_email: gmailEmail,
-      provider_refresh_token: providerRefreshToken,
-    }, { onConflict: 'user_id' });
-  } catch (err) {
-    console.error('Error storing Gmail connection after OAuth:', err);
+  // Ensure a profile row exists (FK constraint for user_gmail_tokens)
+  const profileResult = await supabase.from('profiles').upsert({
+    id: userId,
+    display_name: session.user.user_metadata?.full_name ?? null,
+    avatar_url: session.user.user_metadata?.avatar_url ?? null,
+  }, { onConflict: 'id' });
+
+  if (profileResult.error) {
+    console.error('[storeGmailConnection] Profile upsert failed:', profileResult.error);
+  }
+
+  // Store the Gmail connection
+  const tokenResult = await supabase.from('user_gmail_tokens').upsert({
+    user_id: userId,
+    gmail_email: gmailEmail,
+    provider_refresh_token: providerRefreshToken,
+  }, { onConflict: 'user_id' });
+
+  if (tokenResult.error) {
+    console.error('[storeGmailConnection] Gmail token upsert failed:', tokenResult.error);
+  } else {
+    console.log('[storeGmailConnection] Gmail connection saved successfully');
   }
 }
 
