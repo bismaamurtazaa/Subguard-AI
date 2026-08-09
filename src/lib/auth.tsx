@@ -76,13 +76,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [lastScanAt, setLastScanAt] = useState<string | null>(null);
 
   const fetchGmailStatus = useCallback(async (userId: string) => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('user_gmail_tokens')
       .select('gmail_email, last_scan_at')
       .eq('user_id', userId)
       .maybeSingle();
 
-    if (data) {
+    if (error) {
+      console.error('[fetchGmailStatus] Query failed:', error);
+      setGmailConnected(false);
+      setGmailEmail(null);
+      setLastScanAt(null);
+    } else if (data) {
       setGmailConnected(true);
       setGmailEmail((data as unknown as { gmail_email: string | null }).gmail_email);
       setLastScanAt((data as unknown as { last_scan_at: string | null }).last_scan_at);

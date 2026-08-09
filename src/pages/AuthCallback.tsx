@@ -12,7 +12,7 @@ export default function AuthCallback() {
     let cancelled = false;
 
     const handleCallback = async () => {
-      const { data, error: sessionError } = await supabase.auth.getSession();
+      const { data: initData, error: sessionError } = await supabase.auth.getSession();
       
       if (cancelled) return;
 
@@ -22,7 +22,9 @@ export default function AuthCallback() {
         return;
       }
 
-      if (!data.session) {
+      let session = initData.session;
+
+      if (!session) {
         // Maybe the PKCE exchange hasn't completed yet — try waiting
         console.warn('[AuthCallback] No session on first attempt, waiting…');
         setStatus('Processing authentication…');
@@ -38,10 +40,8 @@ export default function AuthCallback() {
           setError('No session found. Please try signing in again.');
           return;
         }
-        data.session = retry.data.session;
+        session = retry.data.session;
       }
-
-      const session = data.session;
 
       // 🔍 Log the full session to debug Gmail connection issues
       console.log('[AuthCallback] Session obtained:', {
