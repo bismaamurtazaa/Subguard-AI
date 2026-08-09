@@ -527,14 +527,51 @@ export type TablesUpdate<
       : never
     : never
 
-/* ──────────── Named row types (backward-compatible with app imports) ──────────── */
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
 
-export type Profile = Tables<'profiles'>;
-export type UserGmailToken = Tables<'user_gmail_tokens'>;
-export type DetectedEmail = Tables<'detected_emails'>;
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+  public: {
+    Enums: {},
+  },
+} as const
+
+// ─── Convenience type aliases ──────────────────────────
+
 export type Subscription = Tables<'subscriptions'>;
-export type UsageSignal = Tables<'usage_signals'>;
-export type OverlapGroup = Tables<'overlap_groups'>;
-export type OverlapMember = Tables<'overlap_members'>;
 export type Recommendation = Tables<'recommendations'>;
 export type RenewalAlert = Tables<'renewal_alerts'>;
+export type OverlapGroup = Tables<'overlap_groups'>;
+export type OverlapMember = Tables<'overlap_members'>;
+export type UsageSignal = Tables<'usage_signals'>;

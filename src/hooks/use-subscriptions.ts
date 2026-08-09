@@ -10,7 +10,12 @@ import {
   mockUsageSignals,
   getOverlapMembersForGroup,
 } from '../data/mock-data';
-import type { Subscription, Recommendation, RenewalAlert, OverlapGroup } from '../lib/database.types';
+import type {
+  Subscription,
+  Recommendation,
+  RenewalAlert,
+  OverlapGroup,
+} from '../lib/database.types';
 
 /* ──────────── Helpers ──────────── */
 
@@ -201,7 +206,7 @@ export function useSubscriptionOverlaps(
   const groups = useOverlapGroups();
 
   return useMemo(
-    () => groups.filter((g) => g.subscriptions.some((s) => s.id === subscriptionId)),
+    () => groups.filter((g) => g.subscriptions.some((s: Subscription) => s.id === subscriptionId)),
     [groups, subscriptionId],
   );
 }

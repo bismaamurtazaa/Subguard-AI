@@ -7,6 +7,5 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIU
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   auth: {
     flowType: 'implicit',
-    emailRedirectTo: window.location.origin,
   },
 });

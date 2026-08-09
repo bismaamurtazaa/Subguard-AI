@@ -9,6 +9,7 @@ import {
   Layers,
   AlertTriangle,
 } from 'lucide-react';
+import type { Subscription } from '../lib/database.types';
 import {
   useSubscription,
   useUsageSignals,
@@ -228,7 +229,7 @@ export default function SubscriptionDetail() {
                     </p>
                     {group.subscriptions.length > 1 && (
                       <div className="mt-2 space-y-1">
-                        {group.subscriptions.map((s) => (
+                        {group.subscriptions.map((s: Subscription) => (
                           <button
                             key={s.id}
                             onClick={() => navigate(`/subscriptions/${s.id}`)}
