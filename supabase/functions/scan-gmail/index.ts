@@ -676,7 +676,7 @@ Deno.serve(async (req: Request) => {
             received_at: receivedAt,
             category: info.category,
             is_processed: true,
-          }, { onConflict: 'gmail_message_id', ignoreDuplicates: 'gmail_message_id' })
+          }, { onConflict: 'gmail_message_id', ignoreDuplicates: true })
           .select('id')
           .single();
 
