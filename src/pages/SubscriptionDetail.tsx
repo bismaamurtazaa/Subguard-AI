@@ -109,7 +109,7 @@ export default function SubscriptionDetail() {
             </div>
 
             <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-              <InfoTile label="Price" value={`PKR ${sub.price.toLocaleString()}`} />
+              <InfoTile label="Price" value={sub.price > 0 ? `PKR ${sub.price.toLocaleString()}` : 'Unknown'} />
               <InfoTile
                 label="Billing"
                 value={sub.billing_cycle === 'yearly' ? 'Yearly' : 'Monthly'}
@@ -239,7 +239,7 @@ export default function SubscriptionDetail() {
                               {s.service_name}
                             </span>
                             <span className="text-foreground/50">
-                              PKR {s.price.toLocaleString()}/mo
+                              {s.price > 0 ? `PKR ${s.price.toLocaleString()}/mo` : 'Price unknown'}
                             </span>
                           </button>
                         ))}

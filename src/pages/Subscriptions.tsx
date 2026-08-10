@@ -198,10 +198,16 @@ export default function Subscriptions() {
 
               {/* Price */}
               <p className="mb-3 text-xl font-bold text-foreground">
-                PKR {sub.price.toLocaleString()}
-                <span className="ml-1 text-xs font-normal text-foreground/40">
-                  /{sub.billing_cycle === 'yearly' ? 'yr' : 'mo'}
-                </span>
+                {sub.price > 0 ? (
+                  <>
+                    PKR {sub.price.toLocaleString()}
+                    <span className="ml-1 text-xs font-normal text-foreground/40">
+                      /{sub.billing_cycle === 'yearly' ? 'yr' : 'mo'}
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-base font-normal text-foreground/40">Price unknown</span>
+                )}
               </p>
 
               {/* Bottom row */}

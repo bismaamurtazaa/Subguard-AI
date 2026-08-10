@@ -287,6 +287,47 @@ function getHeader(headers: { name: string; value: string }[], name: string): st
   return h?.value ?? '';
 }
 
+// Recursively extract readable text from a Gmail message payload (text/plain or
+// text/html parts). Used to find prices/dates that live in the email body.
+function extractBodyText(payload: Record<string, unknown>): string {
+  const mimeType = (payload.mimeType as string) ?? '';
+  const body = payload.body as { data?: string } | undefined;
+  const parts = (payload.parts as Record<string, unknown>[] | undefined) ?? [];
+
+  const chunks: string[] = [];
+
+  if (body?.data) {
+    const decoded = decodeBase64Url(body.data);
+    if (mimeType === 'text/html') {
+      // Strip HTML tags to get readable text
+      chunks.push(
+        decoded
+          .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+          .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+          .replace(/<br\s*\/?>/gi, '\n')
+          .replace(/<\/p>|<\/div>|<\/tr>|<\/h[1-6]>/gi, '\n')
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/&nbsp;/gi, ' ')
+          .replace(/&amp;/gi, '&')
+          .replace(/&lt;/gi, '<')
+          .replace(/&gt;/gi, '>')
+          .replace(/&#39;/gi, "'")
+          .replace(/\s+/g, ' ')
+          .trim(),
+      );
+    } else {
+      chunks.push(decoded);
+    }
+  }
+
+  for (const part of parts) {
+    const text = extractBodyText(part);
+    if (text) chunks.push(text);
+  }
+
+  return chunks.join(' ').replace(/\s+/g, ' ').trim();
+}
+
 /* ──────────── Known subscription senders ──────────── */
 
 const KNOWN_DOMAINS: Record<string, { service: string; category: string }> = {
@@ -318,20 +359,51 @@ const KNOWN_DOMAINS: Record<string, { service: string; category: string }> = {
   'peacocktv.com': { service: 'Peacock', category: 'entertainment' },
 };
 
-/* ──────────── Search query builder ──────────── */
+/* ──────────── Search query builder (chunked — one query per small domain group) ──────────── */
 
-function buildSearchQuery(): string {
-  // Use clean domain syntax (no wildcard prefix — Gmail doesn't reliably support *@)
-  const domainQueries = Object.keys(KNOWN_DOMAINS).map(
-    (d) => `from:${d}`,
-  );
-  const keywordQueries = [
-    'subject:("subscription confirmed" OR "trial started" OR "payment successful" OR "receipt" OR "invoice" OR "your subscription" OR "welcome to" OR "billing" OR "renewal" OR "payment received" OR "order confirmation" OR "thank you for your purchase")',
-  ];
+const DOMAIN_CHUNK_SIZE = 5;
+const SEARCH_WINDOW_DAYS = 180;
+
+function buildSearchQueries(): string[] {
   const recent = new Date();
-  recent.setMonth(recent.getMonth() - 6);
+  recent.setDate(recent.getDate() - SEARCH_WINDOW_DAYS);
   const dateStr = recent.toISOString().slice(0, 10);
-  return `(${domainQueries.join(' OR ')}) OR (${keywordQueries.join(' OR ')} AND after:${dateStr})`;
+
+  const queries: string[] = [];
+
+  // One query per small chunk of domains. A single giant OR-chain (26+ domains
+  // plus a huge subject clause) gets truncated by Gmail and silently drops
+  // legitimate senders — chunking guarantees every domain gets its own search
+  // slot (e.g. spotify.com) and applies the date window to every query.
+  const domains = Object.keys(KNOWN_DOMAINS);
+  for (let i = 0; i < domains.length; i += DOMAIN_CHUNK_SIZE) {
+    const chunk = domains.slice(i, i + DOMAIN_CHUNK_SIZE);
+    queries.push(`(${chunk.map((d) => `from:${d}`).join(' OR ')}) AND after:${dateStr}`);
+  }
+
+  // Subject-keyword query for senders that aren't in KNOWN_DOMAINS.
+  // Deliberately excludes noisy terms like "welcome to", "order confirmation"
+  // and "thank you for your purchase" which create false positives.
+  const keywords = [
+    'subscription confirmed',
+    'trial started',
+    'payment successful',
+    'payment received',
+    'your subscription',
+    'billing',
+    'renewal',
+    'invoice',
+    'receipt',
+    'subscription will expire',
+    'auto-renew',
+    'charged',
+    'next billing date',
+    'renews on',
+    'payment failed',
+  ];
+  queries.push(`(${keywords.map((k) => `subject:"${k}"`).join(' OR ')}) AND after:${dateStr}`);
+
+  return queries;
 }
 
 /* ──────────── Subscription extractor (rule-based) ──────────── */
@@ -346,12 +418,27 @@ interface ExtractedInfo {
   isTrial: boolean;
 }
 
-const PRICE_PATTERNS = [
-  /(?:PKR|Rs\.?|₹|USD|\$|EUR|£)\s*([\d,]+(?:\.\d{1,2})?)/i,
-  /([\d,]+(?:\.\d{1,2})?)\s*(?:PKR|Rs\.?|₹|USD|\$|EUR|£)/i,
-  /(?:charged|price|amount|payment|cost)\s*(?:of|:|\s)\s*(?:PKR|Rs\.?|₹|\$|EUR|£)?\s*([\d,]+(?:\.\d{1,2})?)/i,
-  /([\d,]+(?:\.\d{1,2})?)\s*(?:PKR|Rs|USD|EUR)/i,
-];
+// PKR conversion rates (mirror the AI prompt: $1 ≈ PKR 280, €1 ≈ PKR 300, £1 ≈ PKR 350)
+const CURRENCY_RATES: Record<string, number> = {
+  PKR: 1,
+  RS: 1,
+  '₹': 1,
+  USD: 280,
+  '$': 280,
+  EUR: 300,
+  '€': 300,
+  GBP: 350,
+  '£': 350,
+};
+
+function normalizeCurrency(cur: string): string {
+  const c = cur.trim();
+  if (c === '$') return 'USD';
+  if (c === '€') return 'EUR';
+  if (c === '£') return 'GBP';
+  if (c === '₹') return 'INR';
+  return c.replace(/\./g, '').toUpperCase();
+}
 
 const DATE_PATTERNS = [
   /(?:renew(?:s|al)?|next billing|billing date|charged on)\s*:?\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2})(?:st|nd|rd|th)?,?\s*(20\d{2})?/i,
@@ -408,13 +495,31 @@ function parseDateFromText(text: string): string | null {
 }
 
 function extractPrice(text: string): number | null {
-  for (const pattern of PRICE_PATTERNS) {
-    const m = text.match(pattern);
-    if (m) {
-      const num = parseFloat(m[1].replace(/,/g, ''));
-      if (!isNaN(num) && num > 0 && num < 1000000) return num;
-    }
+  // Pattern 1: currency before amount, e.g. "PKR 1,500" / "$20.00" / "USD 12"
+  const m1 = text.match(/(PKR|Rs\.?|₹|USD|\$|EUR|€|GBP|£)\s*([\d,]+(?:\.\d{1,2})?)/i);
+  if (m1) {
+    const num = parseFloat(m1[2].replace(/,/g, ''));
+    const rate = CURRENCY_RATES[normalizeCurrency(m1[1])] ?? 1;
+    if (!isNaN(num) && num > 0 && num < 1000000) return Math.round(num * rate);
   }
+
+  // Pattern 2: amount then currency, e.g. "1,500 PKR" / "12 USD"
+  const m2 = text.match(/([\d,]+(?:\.\d{1,2})?)\s*(PKR|Rs\.?|₹|USD|EUR|GBP)/i);
+  if (m2) {
+    const num = parseFloat(m2[1].replace(/,/g, ''));
+    const rate = CURRENCY_RATES[normalizeCurrency(m2[2])] ?? 1;
+    if (!isNaN(num) && num > 0 && num < 1000000) return Math.round(num * rate);
+  }
+
+  // Pattern 3: keyword-led amount, e.g. "charged $20" / "price: 1500" / "payment of 500"
+  const m3 = text.match(
+    /(?:charged|price|amount|payment|cost)\s*(?:of|:|\s)\s*(?:PKR|Rs\.?|₹|\$|EUR|£|USD)?\s*([\d,]+(?:\.\d{1,2})?)/i,
+  );
+  if (m3) {
+    const num = parseFloat(m3[1].replace(/,/g, ''));
+    if (!isNaN(num) && num > 0 && num < 1000000) return Math.round(num);
+  }
+
   return null;
 }
 
@@ -493,6 +598,79 @@ function extractInfo(subject: string, snippet: string, fromAddress: string): Ext
     category,
     isTrial,
   };
+}
+
+/* ──────────── Evidence gating: is this email actually a subscription? ──────────── */
+
+// Subject/snippet patterns that indicate a NON-subscription email: marketing,
+// security, social notifications, one-time order receipts, welcome emails, etc.
+const NOISE_PATTERNS = [
+  /welcome to/i,
+  /security alert/i,
+  /new device/i,
+  /sign-?in/i,
+  /shared .*account data/i,
+  /is popular in your network/i,
+  /coming soon/i,
+  /top picks/i,
+  /what'?s everyone watching/i,
+  /come back/i,
+  /goodbye/i,
+  /weekly progress/i,
+  /order (?:id|confirmation|receipt)/i,
+  /receipt for order/i,
+  /thank you for your purchase/i,
+  /top 10/i,
+  /add a card/i,
+  /you'?ve downloaded/i,
+];
+
+// Senders that are known to send marketing/security/notification emails that are
+// NOT proof of an active paid subscription (or are one-time restaurant orders).
+const SENDER_BLOCKLIST = [
+  'noreply-accounts@google.com',      // Google account/OAuth security notices
+  'google-health-noreply@google.com', // Google Health weekly progress
+  'googlewallet-noreply@google.com',  // Google Wallet promos
+  'messages-noreply@linkedin.com',    // LinkedIn social notifications
+  'notify@updates.notion.so',         // Notion security/account alerts
+  'marketplace@mail.notion.so',       // Notion marketplace template downloads
+  'info@members.netflix.com',         // Netflix marketing ("here's what's coming soon")
+  'info@join.netflix.com',            // Netflix marketing
+  'info@account.netflix.com',         // Netflix account/security notices
+  'no-reply@mail.indolj.io',          // Kababjees restaurant order receipts
+];
+
+// Strong billing/subscription signals that justify creating/updating a subscription.
+const BILLING_SIGNALS = [
+  /subscription (?:confirmed|started|activated|renewed|expires|will expire|has been|paused|cancel)/i,
+  /payment (?:received|successful|processed|made|failed|unsuccessful)/i,
+  /receipt|invoice|billing|renewal|auto-?renew/i,
+  /trial (?:started|ends?|expires?)/i,
+  /charged|charge/i,
+  /next billing date/i,
+  /renews on/i,
+];
+
+function isNoiseEmail(subject: string, snippet: string): boolean {
+  const text = `${subject} ${snippet}`;
+  return NOISE_PATTERNS.some((re) => re.test(text));
+}
+
+function isBlockedSender(fromAddress: string): boolean {
+  const fromLower = fromAddress.toLowerCase();
+  return SENDER_BLOCKLIST.some((s) => fromLower.includes(s));
+}
+
+function hasBillingSignal(subject: string, snippet: string): boolean {
+  const text = `${subject} ${snippet}`;
+  return BILLING_SIGNALS.some((re) => re.test(text));
+}
+
+function inferStatus(subject: string, snippet: string): string | null {
+  const text = `${subject} ${snippet}`;
+  if (/(?:paused|suspended|payment .*unsuccessful|failed to process)/i.test(text)) return 'paused';
+  if (/(?:cancel(?:led|ed|l)?|goodbye|cancellation)/i.test(text)) return 'canceled';
+  return null;
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -595,16 +773,23 @@ Deno.serve(async (req: Request) => {
     const profile = await gmailFetch('/profile', providerToken);
     const gmailEmail = profile.emailAddress;
 
-    // Build search query
-    const query = buildSearchQuery();
+    // Build chunked search queries (one per small domain group + one keyword query)
+    const queries = buildSearchQueries();
 
-    // Search for messages
-    const searchResult = await gmailFetch(
-      `/messages?q=${encodeURIComponent(query)}&maxResults=50`,
-      providerToken,
-    );
-
-    const messageIds: string[] = searchResult.messages?.map((m: { id: string }) => m.id) ?? [];
+    // Run each query and merge + dedupe results. Chunking keeps every query short
+    // enough for Gmail to honour fully, so each known domain (incl. spotify.com)
+    // gets its own search slot instead of being drowned out in one giant OR-chain.
+    const messageIdSet = new Set<string>();
+    for (const query of queries) {
+      const searchResult = await gmailFetch(
+        `/messages?q=${encodeURIComponent(query)}&maxResults=50`,
+        providerToken,
+      );
+      for (const m of searchResult.messages ?? []) {
+        messageIdSet.add(m.id);
+      }
+    }
+    const messageIds: string[] = [...messageIdSet].slice(0, 150);
 
     if (messageIds.length === 0) {
       await supabaseClient.from('user_gmail_tokens').upsert({
@@ -643,6 +828,29 @@ Deno.serve(async (req: Request) => {
 
         // Extract subscription info (rule-based first)
         let info = extractInfo(subject, snippet, fromAddress);
+
+        // If the snippet doesn't contain a price (prices usually live in the HTML
+        // body, not the ~100-char snippet), fetch the full message and re-extract.
+        if (!info.price || info.price <= 0) {
+          try {
+            const full = await gmailFetch(`/messages/${msgId}?format=full`, providerToken);
+            const bodyText = extractBodyText(full.payload ?? {});
+            if (bodyText) {
+              const bodyInfo = extractInfo(subject, bodyText.slice(0, 4000), fromAddress);
+              if (bodyInfo.price && bodyInfo.price > 0) {
+                info = { ...info, price: bodyInfo.price, billingCycle: bodyInfo.billingCycle };
+              }
+              if (!info.nextDate && bodyInfo.nextDate) {
+                info = { ...info, nextDate: bodyInfo.nextDate };
+              }
+              if (!info.trialEnd && bodyInfo.trialEnd) {
+                info = { ...info, trialEnd: bodyInfo.trialEnd, isTrial: true };
+              }
+            }
+          } catch {
+            // Body fetch failed — keep snippet-based info
+          }
+        }
 
         // AI enhancement: call when regex missed key fields
         const needsAI = !info.price || info.price <= 0 ||
@@ -704,19 +912,30 @@ Deno.serve(async (req: Request) => {
           (d) => fromLower.includes(d),
         );
 
+        // Evidence gating: only treat as a subscription when the email actually
+        // looks like billing/subscription activity — not marketing, security
+        // notices, social notifications, or one-time order receipts.
+        const noise = isNoiseEmail(subject, snippet);
+        const blockedSender = isBlockedSender(fromAddress);
+        const billingSignal = hasBillingSignal(subject, snippet);
+        const isSubscriptionEmail = !noise && !blockedSender &&
+          (billingSignal || isKnownDomain);
+
         // Check if service already exists for this user
         const { data: existingSub } = await supabaseClient
           .from('subscriptions')
-          .select('id, service_name')
+          .select('id, service_name, status')
           .eq('user_id', user.id)
           .ilike('service_name', `%${info.serviceName.split(' ').slice(0, 2).join(' ')}%`)
           .maybeSingle();
 
-        // Create subscription when:
-        //   a) price is known and > 0, OR
-        //   b) service is confidently identified from a known domain (price may be in HTML body, not snippet)
+        const inferredStatus = inferStatus(subject, snippet);
+
+        // Create subscription when the email is genuine subscription evidence:
+        //   a) not marketing/notification noise, AND
+        //   b) service is confidently identified from a known domain, OR has a price
         // Skip if service name is "Unknown Service" with no price.
-        const shouldCreate = !existingSub && (
+        const shouldCreate = !existingSub && isSubscriptionEmail && (
           (info.price !== null && info.price > 0) ||
           (isKnownDomain && info.serviceName !== 'Unknown Service') ||
           (info.isTrial)
@@ -734,7 +953,7 @@ Deno.serve(async (req: Request) => {
               currency: 'PKR',
               billing_cycle: info.billingCycle || 'monthly',
               category: info.category,
-              status: info.isTrial ? 'trial' : 'active',
+              status: info.isTrial ? 'trial' : (inferredStatus ?? 'active'),
               next_billing_date: info.nextDate,
               trial_end_date: info.trialEnd,
               detected_email_id: emailId,
@@ -760,8 +979,9 @@ Deno.serve(async (req: Request) => {
           } else {
             console.error(`Failed to create subscription for "${info.serviceName}":`, subError?.message);
           }
-        } else if (existingSub) {
-          // Update existing
+        } else if (existingSub && isSubscriptionEmail) {
+          // Update existing — only when the email is genuine subscription evidence,
+          // so marketing emails never overwrite billing details.
           await supabaseClient
             .from('subscriptions')
             .update({
@@ -769,6 +989,7 @@ Deno.serve(async (req: Request) => {
               updated_at: new Date().toISOString(),
               ...(info.nextDate ? { next_billing_date: info.nextDate } : {}),
               ...(info.price && info.price > 0 ? { price: info.price } : {}),
+              ...(inferredStatus ? { status: inferredStatus } : {}),
             })
             .eq('id', existingSub.id);
 
