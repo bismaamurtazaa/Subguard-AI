@@ -364,6 +364,19 @@ const KNOWN_DOMAINS: Record<string, { service: string; category: string }> = {
 const DOMAIN_CHUNK_SIZE = 5;
 const SEARCH_WINDOW_DAYS = 180;
 
+// Domains that send high email volumes (marketing, order confirmations, account
+// notices, security alerts, etc.). Each gets its OWN dedicated search query so
+// genuine billing emails — e.g. Spotify receipts — are never crowded out of a
+// shared 50-result window by marketing noise from other senders.
+const HIGH_VOLUME_DOMAINS = [
+  'netflix.com',
+  'spotify.com',
+  'youtube.com',
+  'amazon.com',
+  'apple.com',
+  'google.com',
+];
+
 function buildSearchQueries(): string[] {
   const recent = new Date();
   recent.setDate(recent.getDate() - SEARCH_WINDOW_DAYS);
@@ -371,11 +384,16 @@ function buildSearchQueries(): string[] {
 
   const queries: string[] = [];
 
-  // One query per small chunk of domains. A single giant OR-chain (26+ domains
-  // plus a huge subject clause) gets truncated by Gmail and silently drops
-  // legitimate senders — chunking guarantees every domain gets its own search
-  // slot (e.g. spotify.com) and applies the date window to every query.
-  const domains = Object.keys(KNOWN_DOMAINS);
+  // 1. One query per high-volume domain — guarantees spotify.com (and friends)
+  //    its own full search window on every scan.
+  for (const domain of HIGH_VOLUME_DOMAINS) {
+    queries.push(`from:${domain} AND after:${dateStr}`);
+  }
+
+  // 2. One query per small chunk of the remaining domains. Chunking keeps every
+  //    query short enough for Gmail to honour fully, so each known domain gets
+  //    its own search slot instead of being dropped from a giant OR-chain.
+  const domains = Object.keys(KNOWN_DOMAINS).filter((d) => !HIGH_VOLUME_DOMAINS.includes(d));
   for (let i = 0; i < domains.length; i += DOMAIN_CHUNK_SIZE) {
     const chunk = domains.slice(i, i + DOMAIN_CHUNK_SIZE);
     queries.push(`(${chunk.map((d) => `from:${d}`).join(' OR ')}) AND after:${dateStr}`);
@@ -623,6 +641,18 @@ const NOISE_PATTERNS = [
   /top 10/i,
   /add a card/i,
   /you'?ve downloaded/i,
+  // ── One-time purchases & transfers — NOT recurring subscriptions ──
+  /your receipt from apple/i,            // App Store one-time purchase receipts
+  /app store (?:purchase|receipt|order)/i,
+  /your (?:google play|play store) (?:receipt|purchase|order)/i,
+  /google play (?:purchase|receipt)/i,
+  /purchase (?:confirmation|receipt|complete|successful)/i,
+  /thank you for your (?:order|purchase)/i,
+  /your amazon(?:\.com)? order/i,        // Amazon order confirmations
+  /order (?:shipped|delivered|on its way|updated|cancelled|canceled)/i,
+  /(?:package|parcel|delivery) (?:shipped|delivered|out for delivery)/i,
+  /track your (?:package|order|delivery)/i,
+  /you'?ve (?:sent|received) (?:a )?payment/i,  // peer-to-peer transfers
 ];
 
 // Senders that are known to send marketing/security/notification emails that are
@@ -782,14 +812,14 @@ Deno.serve(async (req: Request) => {
     const messageIdSet = new Set<string>();
     for (const query of queries) {
       const searchResult = await gmailFetch(
-        `/messages?q=${encodeURIComponent(query)}&maxResults=50`,
+        `/messages?q=${encodeURIComponent(query)}&maxResults=100`,
         providerToken,
       );
       for (const m of searchResult.messages ?? []) {
         messageIdSet.add(m.id);
       }
     }
-    const messageIds: string[] = [...messageIdSet].slice(0, 150);
+    const messageIds: string[] = [...messageIdSet].slice(0, 250);
 
     if (messageIds.length === 0) {
       await supabaseClient.from('user_gmail_tokens').upsert({
@@ -918,8 +948,23 @@ Deno.serve(async (req: Request) => {
         const noise = isNoiseEmail(subject, snippet);
         const blockedSender = isBlockedSender(fromAddress);
         const billingSignal = hasBillingSignal(subject, snippet);
-        const isSubscriptionEmail = !noise && !blockedSender &&
-          (billingSignal || isKnownDomain);
+
+        // Domains like amazon.com / apple.com / google.com also send huge volumes
+        // of ONE-TIME purchase receipts (orders, App Store, Play Store). A bare
+        // sender match is NOT enough for them — require real subscription
+        // vocabulary (renew/membership/trial…) or a subscription product name,
+        // AND a billing signal or a price, before trusting the email.
+        const HIGH_NOISE_DOMAINS = ['amazon.com', 'apple.com', 'google.com', 'icloud.com'];
+        const requiresExtraSignal = HIGH_NOISE_DOMAINS.some((d) => fromLower.includes(d));
+        const combinedText = `${subject} ${snippet}`;
+        const subscriptionVocab = /subscription|renew|auto-?renew|membership|trial|recurring|next billing|billed (?:monthly|yearly|annually)/i.test(combinedText);
+        const subscriptionProduct = /prime|apple (?:music|tv|one|arcade)|icloud|google one|play pass/i.test(combinedText);
+
+        const isSubscriptionEmail = !noise && !blockedSender && (
+          requiresExtraSignal
+            ? (subscriptionVocab || subscriptionProduct) && (billingSignal || (info.price ?? 0) > 0)
+            : billingSignal || isKnownDomain
+        );
 
         // Check if service already exists for this user
         const { data: existingSub } = await supabaseClient
