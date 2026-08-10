@@ -295,8 +295,11 @@ const KNOWN_DOMAINS: Record<string, { service: string; category: string }> = {
   'deezer.com': { service: 'Deezer', category: 'entertainment' },
   'youtube.com': { service: 'YouTube Premium', category: 'entertainment' },
   'openai.com': { service: 'ChatGPT Plus', category: 'productivity' },
+  'anthropic.com': { service: 'Claude', category: 'productivity' },
   'adobe.com': { service: 'Adobe Creative Cloud', category: 'productivity' },
   'canva.com': { service: 'Canva', category: 'productivity' },
+  'capcut.com': { service: 'CapCut', category: 'productivity' },
+  'bytedance.com': { service: 'CapCut', category: 'productivity' },
   'notion.so': { service: 'Notion', category: 'productivity' },
   'amazon.com': { service: 'Amazon Prime', category: 'shopping' },
   'linkedin.com': { service: 'LinkedIn Premium', category: 'productivity' },
@@ -318,11 +321,12 @@ const KNOWN_DOMAINS: Record<string, { service: string; category: string }> = {
 /* ──────────── Search query builder ──────────── */
 
 function buildSearchQuery(): string {
+  // Use clean domain syntax (no wildcard prefix — Gmail doesn't reliably support *@)
   const domainQueries = Object.keys(KNOWN_DOMAINS).map(
-    (d) => `from:(*@${d})`,
+    (d) => `from:${d}`,
   );
   const keywordQueries = [
-    'subject:("subscription confirmed" OR "trial started" OR "payment successful" OR "receipt" OR "invoice" OR "your subscription" OR "welcome to" OR "billing" OR "renewal" OR "payment received")',
+    'subject:("subscription confirmed" OR "trial started" OR "payment successful" OR "receipt" OR "invoice" OR "your subscription" OR "welcome to" OR "billing" OR "renewal" OR "payment received" OR "order confirmation" OR "thank you for your purchase")',
   ];
   const recent = new Date();
   recent.setMonth(recent.getMonth() - 6);
@@ -482,7 +486,7 @@ function extractInfo(subject: string, snippet: string, fromAddress: string): Ext
 
   return {
     serviceName: service,
-    price: price || 0,
+    price,                               // null when not found — do NOT coerce to 0
     billingCycle: finalCycle,
     nextDate: isTrial ? null : nextDate,
     trialEnd,
@@ -691,6 +695,15 @@ Deno.serve(async (req: Request) => {
           category: info.category,
         });
 
+        // Log every message we process
+        console.log(`Processing: subject="${subject}" from="${fromAddress}" service="${info.serviceName}" price=${info.price} isTrial=${info.isTrial}`);
+
+        // Determine if the sender is a known subscription domain
+        const fromLower = fromAddress.toLowerCase();
+        const isKnownDomain = Object.keys(KNOWN_DOMAINS).some(
+          (d) => fromLower.includes(d),
+        );
+
         // Check if service already exists for this user
         const { data: existingSub } = await supabaseClient
           .from('subscriptions')
@@ -699,14 +712,25 @@ Deno.serve(async (req: Request) => {
           .ilike('service_name', `%${info.serviceName.split(' ').slice(0, 2).join(' ')}%`)
           .maybeSingle();
 
-        if (!existingSub && info.price && info.price > 0) {
+        // Create subscription when:
+        //   a) price is known and > 0, OR
+        //   b) service is confidently identified from a known domain (price may be in HTML body, not snippet)
+        // Skip if service name is "Unknown Service" with no price.
+        const shouldCreate = !existingSub && (
+          (info.price !== null && info.price > 0) ||
+          (isKnownDomain && info.serviceName !== 'Unknown Service') ||
+          (info.isTrial)
+        );
+
+        if (shouldCreate) {
+          console.log(`Creating subscription: "${info.serviceName}" price=${info.price ?? 'unknown'} domain=${isKnownDomain}`);
           // Create new subscription
           const { data: subRecord, error: subError } = await supabaseClient
             .from('subscriptions')
             .insert({
               user_id: user.id,
               service_name: info.serviceName,
-              price: info.price,
+              price: info.price ?? 0,
               currency: 'PKR',
               billing_cycle: info.billingCycle || 'monthly',
               category: info.category,
@@ -733,6 +757,8 @@ Deno.serve(async (req: Request) => {
               signal_date: receivedAt,
               signal_summary: `Email from ${fromAddress}: ${subject}`,
             }).catch(() => {});
+          } else {
+            console.error(`Failed to create subscription for "${info.serviceName}":`, subError?.message);
           }
         } else if (existingSub) {
           // Update existing
