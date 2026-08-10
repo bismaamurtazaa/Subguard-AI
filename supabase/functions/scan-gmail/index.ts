@@ -949,22 +949,18 @@ Deno.serve(async (req: Request) => {
         const blockedSender = isBlockedSender(fromAddress);
         const billingSignal = hasBillingSignal(subject, snippet);
 
-        // Domains like amazon.com / apple.com / google.com also send huge volumes
-        // of ONE-TIME purchase receipts (orders, App Store, Play Store). A bare
-        // sender match is NOT enough for them — require real subscription
-        // vocabulary (renew/membership/trial…) or a subscription product name,
-        // AND a billing signal or a price, before trusting the email.
-        const HIGH_NOISE_DOMAINS = ['amazon.com', 'apple.com', 'google.com', 'icloud.com'];
-        const requiresExtraSignal = HIGH_NOISE_DOMAINS.some((d) => fromLower.includes(d));
+        // IMPORTANT: A sender simply being a "known domain" (e.g. linkedin.com,
+        // fitbit.com, openai.com) is NOT proof of a paid subscription — those
+        // companies also send plenty of free notifications, marketing, and
+        // account emails. Every domain — not just the historically-noisy ones
+        // (amazon/apple/google/icloud) — now requires real subscription
+        // vocabulary or an explicit billing signal before we trust the email.
         const combinedText = `${subject} ${snippet}`;
         const subscriptionVocab = /subscription|renew|auto-?renew|membership|trial|recurring|next billing|billed (?:monthly|yearly|annually)/i.test(combinedText);
-        const subscriptionProduct = /prime|apple (?:music|tv|one|arcade)|icloud|google one|play pass/i.test(combinedText);
+        const subscriptionProduct = /prime|apple (?:music|tv|one|arcade)|icloud|google one|play pass|premium plan|pro plan|plus plan/i.test(combinedText);
 
-        const isSubscriptionEmail = !noise && !blockedSender && (
-          requiresExtraSignal
-            ? (subscriptionVocab || subscriptionProduct) && (billingSignal || (info.price ?? 0) > 0)
-            : billingSignal || isKnownDomain
-        );
+        const isSubscriptionEmail = !noise && !blockedSender &&
+          (billingSignal || subscriptionVocab || subscriptionProduct || (info.price ?? 0) > 0);
 
         // Check if service already exists for this user
         const { data: existingSub } = await supabaseClient
@@ -978,11 +974,11 @@ Deno.serve(async (req: Request) => {
 
         // Create subscription when the email is genuine subscription evidence:
         //   a) not marketing/notification noise, AND
-        //   b) service is confidently identified from a known domain, OR has a price
-        // Skip if service name is "Unknown Service" with no price.
+        //   b) has a real price, OR is a known domain WITH actual subscription
+        //      vocabulary/billing language (never on domain-match alone), OR is a trial.
         const shouldCreate = !existingSub && isSubscriptionEmail && (
           (info.price !== null && info.price > 0) ||
-          (isKnownDomain && info.serviceName !== 'Unknown Service') ||
+          (isKnownDomain && info.serviceName !== 'Unknown Service' && (billingSignal || subscriptionVocab || subscriptionProduct)) ||
           (info.isTrial)
         );
 
