@@ -2,7 +2,7 @@
 
 An AI-powered subscription tracker that connects to your Gmail, automatically detects your subscriptions, scores how much you actually use each one, flags redundant overlaps, and tells you exactly what to cancel to save money — all without a single manual entry.
 
-Built during **NativeBuilder's "Build Without Limits" Hackathon** (lablab.ai, Aug 3–10, 2026), where it finished **#3 out of 295 submissions**.
+Built during **NativeBuilder's "Build Without Limits" Hackathon** (lablab.ai, Aug 3–10, 2026).
 
 **Live app:** https://7edtm73x7pv9c99d94qxspqlp.nativelyai.app/
 **Hackathon submission:** https://lablab.ai/ai-hackathons/nativebuilder-build-without-limits/iu-aicis-team-bisma/subguard-ai-subscription-and-renewal-guardian
